@@ -6,6 +6,7 @@ import { ArrowLeft, Send, Mic, Camera, BookOpen, User, Image as ImageIcon, MicOf
 import { chatStorage } from '../../../lib/chatStorage';
 import { guestUserManager } from '../../../lib/guestUser';
 import { useAuth } from '../../../contexts/AuthContext';
+import MessageBubble from '../../../components/MessageBubble';
 
 export default function ChatInterface() {
   const router = useRouter();
@@ -300,55 +301,6 @@ export default function ChatInterface() {
     router.push('/chat');
   };
 
-  const MessageBubble = ({ message }) => {
-    return (
-      <div className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'} mb-4`}>
-        <div className={`max-w-xs lg:max-w-md ${message.type === 'user' ? 'order-2' : 'order-1'}`}>
-          {/* Message Type Indicator */}
-          <div className={`text-xs mb-1 ${message.type === 'user' ? 'text-right' : 'text-left'}`}>
-            {message.messageType === 'text' && '💬 Text'}
-            {message.messageType === 'voice' && '🎤 Voice'}
-            {message.messageType === 'image' && '📷 Image'}
-          </div>
-          
-          {/* Message Content */}
-          <div
-            className={`px-4 py-3 rounded-2xl ${
-              message.type === 'user'
-                ? 'bg-blue-500 text-white'
-                : 'bg-white text-gray-900 shadow-sm border border-gray-200'
-            }`}
-          >
-            {/* Image Display */}
-            {message.imageUrl && (
-              <div className="mb-3">
-                <img
-                  src={message.imageUrl}
-                  alt="Uploaded"
-                  className="max-w-full h-auto rounded-lg"
-                />
-              </div>
-            )}
-            
-            {/* Text Content */}
-            <p className="text-sm leading-relaxed">{message.content}</p>
-            
-            {/* Timestamp and Usage Info */}
-            <div className={`text-xs mt-1 ${
-              message.type === 'user' ? 'text-blue-100' : 'text-gray-500'
-            }`}>
-              <div>{message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-              {message.usage && (
-                <div className="text-xs opacity-75">
-                  {message.usage.total_tokens} tokens • {message.model}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
