@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { openaiService } from '../../../lib/openaiService';
 import { connectDB } from '../../../../lib/mongodb';
-import { ChatSession } from '../../../../models/ChatSession';
+import ChatSessionNew from '../../../../models/ChatSessionNew';
 import { ChatMessage } from '../../../../models/ChatMessage';
 import { UserStats } from '../../../../models/UserStats';
 import { User } from '../../../../models/User';
@@ -116,7 +116,7 @@ export async function POST(request) {
         await aiMessage.save();
 
         // Update session with last activity
-        await ChatSession.findByIdAndUpdate(
+        await ChatSessionNew.findByIdAndUpdate(
           sessionId,
           {
             $set: {

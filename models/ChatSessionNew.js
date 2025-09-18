@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-const chatSessionSchema = new mongoose.Schema({
+const chatSessionNewSchema = new mongoose.Schema({
   userId: {
     type: String,
     required: false
@@ -55,7 +55,7 @@ const chatSessionSchema = new mongoose.Schema({
 });
 
 // Index for better performance
-chatSessionSchema.index({ userId: 1, status: 1 });
-chatSessionSchema.index({ lastActive: -1 });
+chatSessionNewSchema.index({ userId: 1, status: 1 });
+chatSessionNewSchema.index({ lastActive: -1 });
 
-export default mongoose.models.ChatSession || mongoose.model('ChatSession', chatSessionSchema);
+export default mongoose.models.ChatSessionNew || mongoose.model('ChatSessionNew', chatSessionNewSchema);

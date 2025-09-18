@@ -2,8 +2,7 @@ import mongoose from 'mongoose';
 
 const userStatsSchema = new mongoose.Schema({
   userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    type: String, // Use String type to accept both ObjectId strings and guest IDs
     required: true,
     unique: true
   },

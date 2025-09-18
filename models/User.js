@@ -11,7 +11,7 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: true,
+    required: false, // Not required for auto-registered guest users
     minlength: 6
   },
   name: {
@@ -21,7 +21,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['student', 'parent', 'teacher'],
+    enum: ['student', 'parent', 'teacher', 'other'],
     default: 'student'
   },
   grade: {
@@ -33,6 +33,10 @@ const userSchema = new mongoose.Schema({
   school: {
     type: String,
     trim: true
+  },
+  isGuest: {
+    type: Boolean,
+    default: false
   },
   preferences: {
     language: {
@@ -54,9 +58,9 @@ const userSchema = new mongoose.Schema({
   }
 });
 
-// Hash password before saving
+// Hash password before saving (only if password exists)
 userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next();
+  if (!this.isModified('password') || !this.password) return next();
   
   try {
     const saltRounds = 12;
