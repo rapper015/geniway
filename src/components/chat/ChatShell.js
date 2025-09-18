@@ -226,7 +226,7 @@ export default function ChatShell({ subject, onBack }) {
     // Stream real AI response from orchestrator
     console.log('[ChatShell] Starting streaming with sessionId:', sessionId);
     streamRealAIResponse(text, type === "image" ? metadata?.imageUrl : undefined, sessionId);
-  }, [currentSessionId, isStreaming, showOnboarding, subject, userId, isAuthenticated, waitingForProfileResponse, profileStep, handleProfileResponse]);
+  }, [currentSessionId, isStreaming, showOnboarding, subject, userId, isAuthenticated, waitingForProfileResponse, profileStep]);
 
   // Handle profile collection responses
   const handleProfileResponse = useCallback(async (response) => {
