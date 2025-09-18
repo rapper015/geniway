@@ -12,6 +12,7 @@ export async function GET(request) {
   const message = searchParams.get('message');
   const messageType = searchParams.get('type') || 'text';
   const imageUrl = searchParams.get('imageUrl');
+  const userId = searchParams.get('userId');
 
   if (!sessionId || !message) {
     return NextResponse.json(
@@ -49,7 +50,7 @@ export async function GET(request) {
             type: messageType,
             imageUrl: imageUrl || undefined,
             timestamp: new Date(),
-            userId: 'anonymous', // Will be updated with actual user ID
+            userId: userId || 'anonymous', // Use actual user ID from request
             subject: 'general'
           };
 

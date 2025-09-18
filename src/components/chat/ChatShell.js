@@ -35,6 +35,10 @@ export default function ChatShell({ subject, onBack }) {
   const [waitingForProfileResponse, setWaitingForProfileResponse] = useState(false);
   const [fastTrackMode, setFastTrackMode] = useState(false);
   const [hideQuickActions, setHideQuickActions] = useState(false);
+  const [quizStep, setQuizStep] = useState(null); // null, 'question', 'answer', 'feedback'
+  const [currentQuiz, setCurrentQuiz] = useState(null);
+  const [waitingForQuizResponse, setWaitingForQuizResponse] = useState(false);
+  const [quizCompletedForCurrentQuestion, setQuizCompletedForCurrentQuestion] = useState(false);
 
   // Refs
   const lastCallRef = useRef(null);
@@ -51,7 +55,7 @@ export default function ChatShell({ subject, onBack }) {
       // Generate persistent guest UUID
       let guestUuid = localStorage.getItem('guest_uuid');
       if (!guestUuid) {
-        guestUuid = `guest_${Date.now()}`;
+        guestUuid = `guest_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
         localStorage.setItem('guest_uuid', guestUuid);
       }
       setUserId(guestUuid);
@@ -135,10 +139,77 @@ export default function ChatShell({ subject, onBack }) {
     }
   }, [messages]);
 
+  // Generate quiz question based on subject and recent conversation
+  const generateQuizQuestion = useCallback((subject, recentMessages) => {
+    const quizQuestions = {
+      'mathematics': [
+        {
+          question: "What is 2 + 2?",
+          options: ["3", "4", "5", "6"],
+          correct: 1,
+          explanation: "2 + 2 = 4"
+        },
+        {
+          question: "What is 5 × 3?",
+          options: ["12", "15", "18", "20"],
+          correct: 1,
+          explanation: "5 × 3 = 15"
+        },
+        {
+          question: "What is 10 - 4?",
+          options: ["5", "6", "7", "8"],
+          correct: 1,
+          explanation: "10 - 4 = 6"
+        }
+      ],
+      'science': [
+        {
+          question: "What is the chemical symbol for water?",
+          options: ["H2O", "CO2", "NaCl", "O2"],
+          correct: 0,
+          explanation: "Water is H2O - two hydrogen atoms and one oxygen atom"
+        },
+        {
+          question: "What planet is closest to the Sun?",
+          options: ["Venus", "Earth", "Mercury", "Mars"],
+          correct: 2,
+          explanation: "Mercury is the closest planet to the Sun"
+        }
+      ],
+      'social-science': [
+        {
+          question: "Who was the first President of India?",
+          options: ["Jawaharlal Nehru", "Rajendra Prasad", "Sardar Patel", "Mahatma Gandhi"],
+          correct: 1,
+          explanation: "Dr. Rajendra Prasad was the first President of India"
+        }
+      ],
+      'english': [
+        {
+          question: "What is the plural of 'child'?",
+          options: ["childs", "children", "childes", "child"],
+          correct: 1,
+          explanation: "The plural of 'child' is 'children'"
+        }
+      ]
+    };
+
+    const subjectQuestions = quizQuestions[subject] || quizQuestions['mathematics'];
+    const randomIndex = Math.floor(Math.random() * subjectQuestions.length);
+    return subjectQuestions[randomIndex];
+  }, []);
+
   // Handle message sending with proper session management and error handling
   const handleSendMessage = useCallback(async (text, type = "text", metadata = {}) => {
     console.log('[ChatShell] handleSendMessage called:', { text, type, currentSessionId });
     console.log('[ChatShell] Function called with params:', { text, type, metadata });
+
+    // Handle quiz responses (only if we're actively in quiz mode)
+    if (waitingForQuizResponse && quizStep && quizStep !== null) {
+      console.log('[ChatShell] Quiz active, handling response:', { text, quizStep, waitingForQuizResponse });
+      await handleQuizResponse(text);
+      return;
+    }
 
     // Handle profile collection responses (only if we're actively collecting profile data)
     if (waitingForProfileResponse && profileStep && profileStep !== null) {
@@ -222,11 +293,14 @@ export default function ChatShell({ subject, onBack }) {
     
     // Show quick actions again when user sends a message (they will appear after bot responds)
     setHideQuickActions(false);
+    
+    // Reset quiz completion flag for new question
+    setQuizCompletedForCurrentQuestion(false);
 
     // Stream real AI response from orchestrator
     console.log('[ChatShell] Starting streaming with sessionId:', sessionId);
     streamRealAIResponse(text, type === "image" ? metadata?.imageUrl : undefined, sessionId);
-  }, [currentSessionId, isStreaming, showOnboarding, subject, userId, isAuthenticated, waitingForProfileResponse, profileStep]);
+  }, [currentSessionId, isStreaming, showOnboarding, subject, userId, isAuthenticated, waitingForProfileResponse, profileStep, waitingForQuizResponse, quizStep]);
 
   // Handle profile collection responses
   const handleProfileResponse = useCallback(async (response) => {
@@ -353,6 +427,78 @@ export default function ChatShell({ subject, onBack }) {
     }
   }, [profileStep, subject, waitingForProfileResponse]);
 
+  // Handle quiz responses
+  const handleQuizResponse = useCallback(async (response) => {
+    console.log('[ChatShell] handleQuizResponse called:', { response, quizStep, currentQuiz });
+    
+    const userMessage = {
+      id: `user-${Date.now()}`,
+      content: `I selected option ${response.trim()}`,
+      type: 'user',
+      messageType: 'text',
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+
+    if (quizStep === 'question') {
+      // User selected an option (response is already the option number as string)
+      const selectedOption = parseInt(response.trim()) - 1; // Convert to 0-based index
+      const isCorrect = selectedOption === currentQuiz.correct;
+      
+      // Show feedback
+      const feedbackMessage = {
+        id: `quiz-feedback-${Date.now()}`,
+        content: isCorrect 
+          ? `🎉 Correct! ${currentQuiz.explanation}` 
+          : `❌ Not quite right. The correct answer is: ${currentQuiz.explanation}`,
+        type: 'ai',
+        messageType: 'text',
+        timestamp: new Date(),
+        subject: subject
+      };
+      
+      setMessages(prev => [...prev, feedbackMessage]);
+      
+      // Move to profile collection
+      setQuizStep(null);
+      setWaitingForQuizResponse(false);
+      setCurrentQuiz(null);
+      setQuizCompletedForCurrentQuestion(true); // Mark quiz as completed for this question
+      
+      // Start profile collection
+      const existingProfile = JSON.parse(localStorage.getItem('guestProfile') || '{}');
+      if (!existingProfile.firstName || !existingProfile.lastName) {
+        setProfileStep('name');
+        setProfileData(existingProfile);
+        setWaitingForProfileResponse(true);
+        
+        const nameMessage = {
+          id: `profile-name-${Date.now()}`,
+          content: "Great! Now I'd love to know your name so I can personalize our learning experience. What's your first name?",
+          type: 'ai',
+          messageType: 'text',
+          timestamp: new Date(),
+          subject: subject
+        };
+        
+        setMessages(prev => [...prev, nameMessage]);
+      } else {
+        // Profile already complete, just thank them
+        const thankYouMessage = {
+          id: `thank-you-${Date.now()}`,
+          content: "Thank you for providing your information! If you have any questions, please ask.",
+          type: 'ai',
+          messageType: 'text',
+          timestamp: new Date(),
+          subject: subject
+        };
+        
+        setMessages(prev => [...prev, thankYouMessage]);
+      }
+    }
+  }, [quizStep, currentQuiz, subject]);
+
   // Complete profile collection and create account
   const completeProfileCollection = useCallback(async (finalProfile) => {
     // Save final profile
@@ -375,17 +521,17 @@ export default function ChatShell({ subject, onBack }) {
       if (response.ok) {
         const data = await response.json();
         
-        // Success message
-        const successMessage = {
-          id: `profile-complete-${Date.now()}`,
-          content: `Perfect! Your profile is now complete, ${finalProfile.firstName}. You can now continue learning with personalized content!`,
-          type: 'ai',
-          messageType: 'text',
-          timestamp: new Date(),
-          subject: subject
-        };
-        
-        setMessages(prev => [...prev, successMessage]);
+            // Success message
+            const successMessage = {
+              id: `profile-complete-${Date.now()}`,
+              content: `Thank you for providing your information, ${finalProfile.firstName}! If you have any questions, please ask.`,
+              type: 'ai',
+              messageType: 'text',
+              timestamp: new Date(),
+              subject: subject
+            };
+            
+            setMessages(prev => [...prev, successMessage]);
         
         // Store user data and refresh
         localStorage.setItem('user', JSON.stringify(data.user));
@@ -458,6 +604,7 @@ export default function ChatShell({ subject, onBack }) {
       params.set('message', userInput);
       if (sessionId) params.set('sessionId', sessionId);
       if (imageUrl) params.set('imageUrl', imageUrl);
+      if (userId) params.set('userId', userId);
 
       const eventSource = new EventSource(`/api/solve?${params.toString()}`);
       currentSSERef.current = eventSource;
@@ -658,7 +805,7 @@ export default function ChatShell({ subject, onBack }) {
     }
   }, [handleSendMessage, isAuthenticated, fastTrackMode]);
 
-  // Handle "Got it" clicks for progressive profile collection
+  // Handle "Got it" clicks for quiz and progressive profile collection
   const handleGotItClick = useCallback(() => {
     console.log('[ChatShell] handleGotItClick called:', { gotItCount, isAuthenticated });
     const newGotItCount = gotItCount + 1;
@@ -667,42 +814,45 @@ export default function ChatShell({ subject, onBack }) {
     // Check existing profile data
     const existingProfile = JSON.parse(localStorage.getItem('guestProfile') || '{}');
     
-    if (newGotItCount === 1 && (!existingProfile.firstName || !existingProfile.lastName)) {
-      // First "Got it" - ask for name in chat
-      setProfileStep('name');
-      setProfileData(existingProfile);
-      setWaitingForProfileResponse(true);
+    // Only show quiz if not already completed for current question (for guest users)
+    if (!isAuthenticated && !quizCompletedForCurrentQuestion) {
+      // Generate quiz question
+      const quiz = generateQuizQuestion(subject, messages);
+      setCurrentQuiz(quiz);
+      setQuizStep('question');
+      setWaitingForQuizResponse(true);
       
-      // Add AI message asking for name
-      const nameMessage = {
-        id: `profile-name-${Date.now()}`,
-        content: "Great! I'd love to know your name so I can personalize our learning experience. What's your first name?",
+      // Create quiz message with options
+      const quizMessage = {
+        id: `quiz-${Date.now()}`,
+        content: `Great! Let me test your understanding with a quick question:\n\n**${quiz.question}**`,
+        type: 'ai',
+        messageType: 'quiz',
+        timestamp: new Date(),
+        subject: subject,
+        quizData: {
+          question: quiz.question,
+          options: quiz.options,
+          correct: quiz.correct,
+          explanation: quiz.explanation
+        }
+      };
+      
+      setMessages(prev => [...prev, quizMessage]);
+    } else {
+      // For authenticated users or if quiz already completed, just acknowledge
+      const ackMessage = {
+        id: `ack-${Date.now()}`,
+        content: "Great! If you have any more questions, feel free to ask!",
         type: 'ai',
         messageType: 'text',
         timestamp: new Date(),
         subject: subject
       };
       
-      setMessages(prev => [...prev, nameMessage]);
-    } else if (newGotItCount === 2 && (!existingProfile.role || !existingProfile.grade)) {
-      // Second "Got it" - ask for role and grade in chat
-      setProfileStep('role_grade');
-      setProfileData(existingProfile);
-      setWaitingForProfileResponse(true);
-      
-      // Add AI message asking for role
-      const roleMessage = {
-        id: `profile-role-${Date.now()}`,
-        content: "Perfect! Now, are you a student, parent, teacher, or something else? This helps me provide better learning content for you.",
-        type: 'ai',
-        messageType: 'text',
-        timestamp: new Date(),
-        subject: subject
-      };
-      
-      setMessages(prev => [...prev, roleMessage]);
+      setMessages(prev => [...prev, ackMessage]);
     }
-  }, [gotItCount, subject, isAuthenticated]);
+  }, [gotItCount, subject, isAuthenticated, generateQuizQuestion, messages, quizCompletedForCurrentQuestion]);
 
 
   // Handle voice input
@@ -736,11 +886,19 @@ export default function ChatShell({ subject, onBack }) {
     setShowVisionInput(false);
   }, []);
 
-  // Handle MCQ option selection
+  // Handle MCQ option selection (including quiz options)
   const handleMCQOptionClick = useCallback((selectedOption, questionText) => {
     console.log('MCQ option selected:', selectedOption, 'for question:', questionText);
-    handleSendMessage(`I selected option ${selectedOption.toUpperCase()}`, "text");
-  }, [handleSendMessage]);
+    
+    // Check if we're in quiz mode
+    if (waitingForQuizResponse && quizStep === 'question' && currentQuiz) {
+      // Handle quiz response
+      handleQuizResponse(selectedOption);
+    } else {
+      // Handle regular MCQ
+      handleSendMessage(`I selected option ${selectedOption.toUpperCase()}`, "text");
+    }
+  }, [handleSendMessage, waitingForQuizResponse, quizStep, currentQuiz, handleQuizResponse]);
 
   // Handle retry from queue
   const handleRetryMessage = useCallback((item) => {

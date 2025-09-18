@@ -22,8 +22,9 @@ export async function POST(request) {
       isGuest: isGuest
     });
 
-    // Create new chat session without userId temporarily
+    // Create new chat session with userId for all users (including guests)
     const sessionData = {
+      userId: userId.toString(), // Always include userId for user-specific sessions
       subject: subject || 'general',
       isGuest: isGuest,
       status: 'active',
@@ -33,11 +34,6 @@ export async function POST(request) {
         lastActivity: new Date()
       }
     };
-
-    // Only add userId if it's not a guest ID to avoid validation issues
-    if (!isGuest && userId) {
-      sessionData.userId = userId.toString();
-    }
 
     const session = new ChatSessionNew(sessionData);
 

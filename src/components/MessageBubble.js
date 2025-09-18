@@ -45,9 +45,49 @@ export default function MessageBubble({ message, onRetry, onMCQOptionClick }) {
       );
     }
 
-    // Check if message contains MCQ options
-    const mcqOptions = extractMCQOptions(message.content);
-    if (mcqOptions.length > 0) {
+        // Check if message is a quiz message
+        if (message.messageType === 'quiz' && message.quizData) {
+          const quizData = message.quizData;
+          return (
+            <div>
+              <div className="text-sm leading-relaxed prose prose-sm max-w-none mb-4">
+                <ReactMarkdown
+                  remarkPlugins={[remarkMath]}
+                  rehypePlugins={[rehypeKatex]}
+                  components={{
+                    p: ({ children }) => (
+                      <p className="mb-3 last:mb-0 text-gray-800 leading-relaxed">
+                        {children}
+                      </p>
+                    ),
+                    strong: ({ children }) => (
+                      <strong className="font-semibold text-gray-900">
+                        {children}
+                      </strong>
+                    )
+                  }}
+                >
+                  {message.content}
+                </ReactMarkdown>
+              </div>
+              <div className="space-y-2">
+                {quizData.options.map((option, index) => (
+                  <button
+                    key={index}
+                    onClick={() => onMCQOptionClick && onMCQOptionClick((index + 1).toString(), message.content)}
+                    className="w-full text-left p-3 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                  >
+                    <span className="font-medium text-blue-900">{index + 1})</span> {option}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        }
+
+        // Check if message contains MCQ options
+        const mcqOptions = extractMCQOptions(message.content);
+        if (mcqOptions.length > 0) {
       const contentWithoutOptions = message.content.replace(/[A-D]\)\s+[^\n]+/g, '').trim();
       return (
         <div>
