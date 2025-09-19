@@ -57,7 +57,8 @@ export default function WhatsAppComposer({
           <button
             onClick={onImageUpload}
             disabled={disabled}
-            className="flex-shrink-0 w-9 h-9 rounded-full text-gray-600 hover:bg-gray-50 hover:scale-[1.02] active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-all duration-200 ease-in-out p-1.5 shadow-sm"
+            className="flex-shrink-0 w-9 h-9 rounded-full text-blue-600 hover:bg-blue-50 hover:scale-[1.05] active:scale-[0.95] disabled:opacity-50 disabled:cursor-not-allowed focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-all duration-200 ease-in-out p-1.5 shadow-sm border border-blue-200 hover:border-blue-300"
+            title="Upload image"
           >
             <Image className="w-5 h-5" />
           </button>

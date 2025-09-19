@@ -392,6 +392,7 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
         userId: studentInput.userId,
         subject: session.subject || 'general',
         currentInput: studentInput.text,
+        currentImageUrl: studentInput.imageUrl, // Include image data
         messageHistory: messages,
         curriculumContext: {
           subject: session.subject || 'general',
@@ -491,12 +492,35 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
       }
       
       console.log('[SimpleOrchestrator] Calling OpenAI API');
+      
+      // Prepare messages array
+      const messages = [
+        { role: 'system', content: this.systemPrompt }
+      ];
+
+      // Check if we have an image to analyze
+      if (context.currentImageUrl) {
+        console.log('[SimpleOrchestrator] Image detected, using vision model');
+        messages.push({
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { 
+              type: 'image_url', 
+              image_url: { 
+                url: context.currentImageUrl,
+                detail: 'high'
+              }
+            }
+          ]
+        });
+      } else {
+        messages.push({ role: 'user', content: prompt });
+      }
+
       const response = await this.openai.chat.completions.create({
         model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: this.systemPrompt },
-          { role: 'user', content: prompt }
-        ],
+        messages: messages,
         temperature: 0.3,
         max_tokens: this.getMaxTokensForSection(sectionType)
       });
@@ -526,36 +550,45 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
 
   // Build section-specific prompts
   buildSectionPrompt(sectionType, context) {
-    const { currentInput, curriculumContext, messageHistory } = context;
+    const { currentInput, currentImageUrl, curriculumContext, messageHistory } = context;
     
     switch (sectionType) {
       case this.sectionTypes.BIG_IDEA:
-        return this.buildBigIdeaPrompt(currentInput, curriculumContext, messageHistory);
+        return this.buildBigIdeaPrompt(currentInput, currentImageUrl, curriculumContext, messageHistory);
       
       case this.sectionTypes.EXAMPLE:
-        return this.buildExamplePrompt(currentInput, curriculumContext, messageHistory);
+        return this.buildExamplePrompt(currentInput, currentImageUrl, curriculumContext, messageHistory);
       
       case this.sectionTypes.QUICK_CHECK:
-        return this.buildQuickCheckPrompt(currentInput, curriculumContext);
+        return this.buildQuickCheckPrompt(currentInput, currentImageUrl, curriculumContext);
       
       case this.sectionTypes.TRY_IT:
-        return this.buildTryItPrompt(currentInput, curriculumContext);
+        return this.buildTryItPrompt(currentInput, currentImageUrl, curriculumContext);
       
       case this.sectionTypes.RECAP:
-        return this.buildRecapPrompt(currentInput, curriculumContext, messageHistory);
+        return this.buildRecapPrompt(currentInput, currentImageUrl, curriculumContext, messageHistory);
       
       case this.sectionTypes.MCQ_VALIDATION:
-        return this.buildMCQValidationPrompt(currentInput, curriculumContext, messageHistory);
+        return this.buildMCQValidationPrompt(currentInput, currentImageUrl, curriculumContext, messageHistory);
       
       default:
-        return this.buildBigIdeaPrompt(currentInput, curriculumContext, messageHistory);
+        return this.buildBigIdeaPrompt(currentInput, currentImageUrl, curriculumContext, messageHistory);
     }
   }
 
   // Section-specific prompt builders
-  buildBigIdeaPrompt(input, curriculumContext, messageHistory) {
+  buildBigIdeaPrompt(input, imageUrl, curriculumContext, messageHistory) {
     const conversationContext = messageHistory.length > 0 
       ? `Previous conversation: ${messageHistory.slice(-3).map(m => `${m.sender}: ${m.content}`).join('\n')}`
+      : '';
+
+    const imageContext = imageUrl 
+      ? `\n\n**IMAGE ANALYSIS REQUIRED:**
+The student has uploaded an image. Please analyze the image carefully and provide educational content related to what you see in the image. Focus on:
+- What educational concepts are visible in the image
+- How the image relates to the student's question: "${input}"
+- Provide specific insights about the content shown in the image
+- If the image contains text, equations, diagrams, or educational content, explain them clearly`
       : '';
 
     return `You are Geni Ma'am, a warm Indian tutor. Generate a Big Idea section per US-3.5 scaffolding framework.
@@ -570,19 +603,27 @@ ${conversationContext}
 
 **CONTENT GUIDELINES:**
 Subject: ${curriculumContext.subject} | Language: ${curriculumContext.language === 'hi' ? 'Hindi' : curriculumContext.language === 'hinglish' ? 'Hinglish' : 'English'}
-Topic: ${curriculumContext.subject} | Original: "${input}"
+Topic: ${curriculumContext.subject} | Original: "${input}"${imageContext}
 
 **OUTPUT FORMAT:**
 Provide clear, concise explanation of the core concept in exactly 120 words or fewer. Focus on:
 1. Main concept definition  
 2. Why it matters
 3. One concrete real-world relevant example
-4. Connection to student's question`;
+4. Connection to student's question${imageUrl ? ' and the uploaded image' : ''}`;
   }
 
-  buildExamplePrompt(input, curriculumContext, messageHistory) {
+  buildExamplePrompt(input, imageUrl, curriculumContext, messageHistory) {
     const conversationContext = messageHistory.length > 0 
       ? `Previous conversation: ${messageHistory.slice(-3).map(m => `${m.sender}: ${m.content}`).join('\n')}`
+      : '';
+
+    const imageContext = imageUrl 
+      ? `\n\n**IMAGE ANALYSIS REQUIRED:**
+The student has uploaded an image. Please analyze the image and provide step-by-step examples based on what you see in the image. Focus on:
+- What educational concepts are visible in the image
+- How to work through the problem or concept shown in the image
+- Provide specific steps related to the content in the image`
       : '';
 
     // Check if user specifically asked for detailed steps
@@ -592,7 +633,7 @@ Provide clear, concise explanation of the core concept in exactly 120 words or f
 
 ${conversationContext}
 
-EXAMPLE SECTION (3-5 numbered steps): Provide a ${isDetailedStepsRequest ? 'detailed, comprehensive' : 'clear'} step-by-step example based on the complete conversation history.
+EXAMPLE SECTION (3-5 numbered steps): Provide a ${isDetailedStepsRequest ? 'detailed, comprehensive' : 'clear'} step-by-step example based on the complete conversation history.${imageContext}
 
 Context Details:
 Subject: ${curriculumContext.subject} (Class ${curriculumContext.class}) 
@@ -605,7 +646,7 @@ IMPORTANT:
 - If asking for "detailed steps", provide comprehensive, thorough steps with explanations
 - If asking for "simpler example", simplify the SAME topic, don't switch topics
 - Build on the previous explanation context provided
-- Each step should be clear, actionable, and educational
+- Each step should be clear, actionable, and educational${imageUrl ? '\n- Focus on the content visible in the uploaded image' : ''}
 
 Format as:
 Step 1: [Specific action] - [Clear reason and explanation]
@@ -613,22 +654,30 @@ Step 2: [Specific action] - [Clear reason and explanation]
 Step 3: [Specific action] - [Clear reason and explanation]
 ${isDetailedStepsRequest ? 'Step 4: [Additional detail] - [Further explanation]\nStep 5: [Final step] - [Summary and verification]' : ''}
 
-Focus specifically on the original topic: "${input}"`;
+Focus specifically on the original topic: "${input}"${imageUrl ? ' and the uploaded image' : ''}`;
   }
 
-  buildQuickCheckPrompt(input, curriculumContext) {
-    return `You are Geni Ma'am, a warm Indian tutor. Generate a Quick Check MCQ per US-3.5 scaffolding framework.
+  buildQuickCheckPrompt(input, imageUrl, curriculumContext) {
+    const imageContext = imageUrl 
+      ? `\n\n**IMAGE ANALYSIS REQUIRED:**
+The student has uploaded an image. Please create a quiz question based on the content visible in the image. Focus on:
+- What educational concepts are shown in the image
+- Create a question that tests understanding of the image content
+- Make the question directly related to what's visible in the image`
+      : '';
+
+    return `You are Geni Ma'am, a warm Indian tutor. Generate a Quick Check MCQ per US-3.5 scaffolding framework.${imageContext}
 
 ORIGINAL STUDENT QUESTION: "${input}"
 Subject: ${curriculumContext.subject} | Class: ${curriculumContext.class}
 
 **US-3.5 QUICK CHECK REQUIREMENTS:**
 - FORMAT: One clear MCQ question with exactly 4 options (A, B, C, D)
-- PURPOSE: Test understanding of the core concept from "${input}"
-- TOPIC FOCUS: Must be directly related to "${input}"
+- PURPOSE: Test understanding of the core concept from "${input}"${imageUrl ? ' and the uploaded image' : ''}
+- TOPIC FOCUS: Must be directly related to "${input}"${imageUrl ? ' and the content visible in the image' : ''}
 
 **OUTPUT FORMAT:**
-Question: [Brief question about the concept]
+Question: [Brief question about the concept${imageUrl ? ' shown in the image' : ''}]
 
 A) [First option]
 B) [Second option] 
@@ -639,8 +688,16 @@ Correct Answer: [A/B/C/D]
 Explanation: [Brief explanation of why the correct answer is right]`;
   }
 
-  buildTryItPrompt(input, curriculumContext) {
-    return `You are Geni Ma'am, a warm Indian tutor. Generate a Try It section per US-3.5 scaffolding framework.
+  buildTryItPrompt(input, imageUrl, curriculumContext) {
+    const imageContext = imageUrl 
+      ? `\n\n**IMAGE ANALYSIS REQUIRED:**
+The student has uploaded an image. Please provide hints and guidance based on the content visible in the image. Focus on:
+- What educational concepts are shown in the image
+- Provide hints that help the student understand the image content
+- Guide them through the problem or concept shown in the image`
+      : '';
+
+    return `You are Geni Ma'am, a warm Indian tutor. Generate a Try It section per US-3.5 scaffolding framework.${imageContext}
 
 ORIGINAL STUDENT QUESTION: "${input}"
 Subject: ${curriculumContext.subject} | Class: ${curriculumContext.class}
@@ -649,18 +706,26 @@ Subject: ${curriculumContext.subject} | Class: ${curriculumContext.class}
 - PEDAGOGICAL PURPOSE: Give student chance to practice the concept independently
 - GUIDANCE LEVEL: Provide encouragement but let them think for themselves
 - FORMAT: Clear practice prompt with supportive tone
-- TOPIC FOCUS: Must be directly related to "${input}" - not a different topic
+- TOPIC FOCUS: Must be directly related to "${input}"${imageUrl ? ' and the uploaded image' : ''} - not a different topic
 
 **OUTPUT FORMAT:**
-Provide encouraging practice prompt about "${input}" that motivates the student to try applying this specific concept.
+Provide encouraging practice prompt about "${input}"${imageUrl ? ' and the content in the image' : ''} that motivates the student to try applying this specific concept.
 Keep it concise and supportive.
 
-Focus on building confidence and independent application of "${input}".`;
+Focus on building confidence and independent application of "${input}"${imageUrl ? ' based on what they see in the image' : ''}.`;
   }
 
-  buildRecapPrompt(input, curriculumContext, messageHistory) {
+  buildRecapPrompt(input, imageUrl, curriculumContext, messageHistory) {
     const conversationContext = messageHistory.length > 0 
       ? `Previous conversation: ${messageHistory.slice(-3).map(m => `${m.sender}: ${m.content}`).join('\n')}`
+      : '';
+
+    const imageContext = imageUrl 
+      ? `\n\n**IMAGE ANALYSIS REQUIRED:**
+The student has uploaded an image. Please provide a summary that includes insights from the image. Focus on:
+- What key concepts were shown in the image
+- How the image content relates to the overall learning
+- Summarize both the conversation and the image content`
       : '';
 
     return `You are Geni Ma'am, a warm Indian tutor. Generate a Recap section per US-3.5 scaffolding framework.
@@ -668,29 +733,37 @@ Focus on building confidence and independent application of "${input}".`;
 Context: Student asked: "${input}"
 Subject: ${curriculumContext.subject} | Class: ${curriculumContext.class}
 
-${conversationContext}
+${conversationContext}${imageContext}
 
 **US-3.5 RECAP REQUIREMENTS:**
 - STRICT FORMAT: Exactly 2 lines maximum
-- PURPOSE: Summarize key learning points from this session
+- PURPOSE: Summarize key learning points from this session${imageUrl ? ' including insights from the uploaded image' : ''}
 - TONE: Encouraging and consolidating
 
 **OUTPUT FORMAT:**
 Provide exactly 2 lines that recap the main learning points.
-Line 1: Core concept summary
+Line 1: Core concept summary${imageUrl ? ' (including image insights)' : ''}
 Line 2: Practical application or significance
 
 Keep it concise and encouraging.`;
   }
 
-  buildMCQValidationPrompt(input, curriculumContext, messageHistory) {
+  buildMCQValidationPrompt(input, imageUrl, curriculumContext, messageHistory) {
     const lastAIMessage = messageHistory.filter(m => m.sender === 'ai').pop();
     const quickCheckContent = lastAIMessage ? lastAIMessage.content : '';
+
+    const imageContext = imageUrl 
+      ? `\n\n**IMAGE ANALYSIS REQUIRED:**
+The student has uploaded an image. Please provide feedback that considers both their answer and the image content. Focus on:
+- How their answer relates to what's shown in the image
+- Whether they correctly understood the image content
+- Provide feedback that connects their answer to the visual information`
+      : '';
 
     return `You are Geni Ma'am validating a student's MCQ answer.
 
 CONTEXT:
-Student originally asked: "${input}"
+Student originally asked: "${input}"${imageContext}
 
 QUICK CHECK QUESTION YOU ASKED:
 ${quickCheckContent}
@@ -703,7 +776,7 @@ Analyze the student's response against the quick check question and provide appr
 
 1. If CORRECT: Provide encouraging feedback with brief explanation (≤50 words)
 2. If INCORRECT: Show "⚠️ Common Mistake" warning, explain why their choice is wrong, and guide them to the correct understanding
-3. If unclear: Provide constructive educational guidance about the concept
+3. If unclear: Provide constructive educational guidance about the concept${imageUrl ? ' and the image content' : ''}
 
 You have the complete question context above - determine the correct answer based on the question content and validate accordingly.
 

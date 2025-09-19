@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import MessageList from './MessageList';
 import WhatsAppComposer from './WhatsAppComposer';
+import VisionInputModal from './VisionInputModal';
 import { DEFAULT_QUICK_REPLIES } from './QuickRepliesBar';
 import SettingsModal from './SettingsModal';
 
@@ -143,23 +144,55 @@ export default function ChatShell({ subject, onBack }) {
     }
   }, [messages]);
 
-  // Generate contextual quiz question based on user's original question
-  const generateQuizQuestion = useCallback(async (subject, recentMessages, userQuestion) => {
+  // Debug: Log state changes
+  useEffect(() => {
+    console.log('[ChatShell] State changed:', {
+      hideQuickActions,
+      isStreaming,
+      messagesCount: messages.length,
+      lastMessage: messages[messages.length - 1] ? {
+        type: messages[messages.length - 1].type,
+        id: messages[messages.length - 1].id,
+        content: messages[messages.length - 1].content?.substring(0, 50)
+      } : null
+    });
+  }, [hideQuickActions, isStreaming, messages]);
+
+  // Generate contextual quiz question based on AI's response content
+  const generateQuizQuestion = useCallback(async (subject, recentMessages, originalUserQuestion) => {
     try {
-      console.log('[ChatShell] Generating contextual quiz for:', { subject, userQuestion });
+      // Find the AI's response content from recent messages
+      const aiResponse = recentMessages.find(msg => msg.type === 'ai' && msg.content);
+      const userQuestion = recentMessages.find(msg => msg.type === 'user')?.content || originalUserQuestion || 'general topic';
       
-      // Find the user's original question from recent messages
-      const originalQuestion = userQuestion || 
-        recentMessages.find(msg => msg.type === 'user')?.content || 
-        'general topic';
+      console.log('[ChatShell] Generating contextual quiz for:', { subject, userQuestion, hasAiResponse: !!aiResponse });
       
-      // Call the AI to generate a contextual quiz question
+      if (!aiResponse) {
+        console.warn('[ChatShell] No AI response found for quiz generation');
+        // Return a fallback quiz based on user question
+        return {
+          question: `Based on your question about "${userQuestion}", which of the following is most relevant?`,
+          options: [
+            "The main concept we discussed",
+            "A related application", 
+            "A common misconception",
+            "A practical example"
+          ],
+          correct: 0,
+          explanation: "This relates to the core concept we just covered in your question."
+        };
+      }
+      
+      console.log('[ChatShell] Using AI response for quiz:', aiResponse.content.substring(0, 100));
+      
+      // Call the AI to generate a contextual quiz question based on the AI's response
       const response = await fetch('/api/generate-quiz', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           subject: subject,
-          originalQuestion: originalQuestion,
+          originalQuestion: userQuestion,
+          aiResponse: aiResponse.content, // Pass the AI's actual response
           context: recentMessages.slice(-3).map(m => `${m.type}: ${m.content}`).join('\n')
         })
       });
@@ -292,203 +325,6 @@ export default function ChatShell({ subject, onBack }) {
     streamRealAIResponse(text, type === "image" ? metadata?.imageUrl : undefined, sessionId);
   }, [currentSessionId, isStreaming, showOnboarding, subject, userId, isAuthenticated, waitingForProfileResponse, profileStep, waitingForQuizResponse, quizStep]);
 
-  // Handle profile collection responses
-  const handleProfileResponse = useCallback(async (response) => {
-    console.log('[ChatShell] handleProfileResponse called:', { response, profileStep, profileData });
-    
-    const userMessage = {
-      id: `user-${Date.now()}`,
-      content: response.trim(),
-      type: 'user',
-      messageType: 'text',
-      timestamp: new Date()
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-
-    if (profileStep === 'name') {
-      console.log('[ChatShell] Processing name step');
-      const nameParts = response.trim().split(' ');
-      
-      if (nameParts.length >= 2) {
-        // User provided both first and last name
-        const firstName = nameParts[0];
-        const lastName = nameParts.slice(1).join(' ');
-        const updatedProfile = { ...profileData, firstName, lastName };
-        
-        // Save name data
-        localStorage.setItem('guestProfile', JSON.stringify(updatedProfile));
-        
-        // Ask for role directly
-        const roleMessage = {
-          id: `profile-role-${Date.now()}`,
-          content: `Nice to meet you, ${firstName} ${lastName}! Now, are you a student, parent, teacher, or something else?`,
-          type: 'ai',
-          messageType: 'text',
-          timestamp: new Date(),
-          subject: subject
-        };
-        
-        setMessages(prev => [...prev, roleMessage]);
-        setProfileData(updatedProfile);
-        setProfileStep('role');
-        console.log('[ChatShell] Set profileStep to role (both names provided)');
-      } else {
-        // User provided only first name
-        const firstName = nameParts[0];
-        const updatedProfile = { ...profileData, firstName };
-        
-        // Ask for last name
-        const lastNameMessage = {
-          id: `profile-lastname-${Date.now()}`,
-          content: `Nice to meet you, ${firstName}! What's your last name?`,
-          type: 'ai',
-          messageType: 'text',
-          timestamp: new Date(),
-          subject: subject
-        };
-        
-        setMessages(prev => [...prev, lastNameMessage]);
-        setProfileData(updatedProfile);
-        setProfileStep('lastname');
-        console.log('[ChatShell] Set profileStep to lastname');
-      }
-      
-    } else if (profileStep === 'lastname') {
-      console.log('[ChatShell] Processing lastname step');
-      // Extract last name and complete name collection
-      const lastName = response.trim();
-      const updatedProfile = { ...profileData, lastName };
-      
-      // Save name data
-      localStorage.setItem('guestProfile', JSON.stringify(updatedProfile));
-      
-      // Ask for role
-      const roleMessage = {
-        id: `profile-role-${Date.now()}`,
-        content: `Thank you, ${updatedProfile.firstName} ${lastName}! Now, are you a student, parent, teacher, or something else?`,
-        type: 'ai',
-        messageType: 'text',
-        timestamp: new Date(),
-        subject: subject
-      };
-      
-      setMessages(prev => [...prev, roleMessage]);
-      setProfileData(updatedProfile);
-      setProfileStep('role');
-      console.log('[ChatShell] Set profileStep to role');
-      // Keep waitingForProfileResponse true for the next step
-      
-    } else if (profileStep === 'role') {
-      // Handle role selection
-      const role = response.trim().toLowerCase();
-      let validRole = 'other';
-      
-      if (role.includes('student')) validRole = 'student';
-      else if (role.includes('parent')) validRole = 'parent';
-      else if (role.includes('teacher')) validRole = 'teacher';
-      
-      const updatedProfile = { ...profileData, role: validRole };
-      
-      if (validRole === 'student') {
-        // Ask for grade
-        const gradeMessage = {
-          id: `profile-grade-${Date.now()}`,
-          content: `Great! What grade or class are you in? (e.g., Class 6, Class 7, etc.)`,
-          type: 'ai',
-          messageType: 'text',
-          timestamp: new Date(),
-          subject: subject
-        };
-        
-        setMessages(prev => [...prev, gradeMessage]);
-        setProfileData(updatedProfile);
-        setProfileStep('grade');
-      } else {
-        // Complete profile for non-students
-        await completeProfileCollection(updatedProfile);
-      }
-      
-    } else if (profileStep === 'grade') {
-      // Handle grade selection
-      const grade = response.trim();
-      const updatedProfile = { ...profileData, grade };
-      await completeProfileCollection(updatedProfile);
-    }
-  }, [profileStep, subject, waitingForProfileResponse]);
-
-  // Handle quiz responses
-  const handleQuizResponse = useCallback(async (response) => {
-    console.log('[ChatShell] handleQuizResponse called:', { response, quizStep, currentQuiz });
-    
-    const userMessage = {
-      id: `user-${Date.now()}`,
-      content: `I selected option ${response.trim()}`,
-      type: 'user',
-      messageType: 'text',
-      timestamp: new Date()
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-
-    if (quizStep === 'question') {
-      // User selected an option (response is already the option number as string)
-      const selectedOption = parseInt(response.trim()) - 1; // Convert to 0-based index
-      const isCorrect = selectedOption === currentQuiz.correct;
-      
-      // Show feedback
-      const feedbackMessage = {
-        id: `quiz-feedback-${Date.now()}`,
-        content: isCorrect 
-          ? `🎉 Correct! ${currentQuiz.explanation}` 
-          : `❌ Not quite right. The correct answer is: ${currentQuiz.explanation}`,
-        type: 'ai',
-        messageType: 'text',
-        timestamp: new Date(),
-        subject: subject
-      };
-      
-      setMessages(prev => [...prev, feedbackMessage]);
-      
-      // Move to profile collection
-      setQuizStep(null);
-      setWaitingForQuizResponse(false);
-      setCurrentQuiz(null);
-      setQuizCompletedForCurrentQuestion(true); // Mark quiz as completed for this question
-      
-      // Start profile collection
-      const existingProfile = JSON.parse(localStorage.getItem('guestProfile') || '{}');
-      if (!existingProfile.firstName || !existingProfile.lastName) {
-        setProfileStep('name');
-        setProfileData(existingProfile);
-        setWaitingForProfileResponse(true);
-        
-        const nameMessage = {
-          id: `profile-name-${Date.now()}`,
-          content: "Great! Now I'd love to know your name so I can personalize our learning experience. What's your first name?",
-          type: 'ai',
-          messageType: 'text',
-          timestamp: new Date(),
-          subject: subject
-        };
-        
-        setMessages(prev => [...prev, nameMessage]);
-      } else {
-        // Profile already complete, just thank them
-        const thankYouMessage = {
-          id: `thank-you-${Date.now()}`,
-          content: "Thank you for providing your information! If you have any questions, please ask.",
-          type: 'ai',
-          messageType: 'text',
-          timestamp: new Date(),
-          subject: subject
-        };
-        
-        setMessages(prev => [...prev, thankYouMessage]);
-      }
-    }
-  }, [quizStep, currentQuiz, subject]);
-
   // Complete profile collection and create account
   const completeProfileCollection = useCallback(async (finalProfile) => {
     // Save final profile
@@ -504,6 +340,21 @@ export default function ChatShell({ subject, onBack }) {
           lastName: finalProfile.lastName,
           role: finalProfile.role,
           grade: finalProfile.grade,
+          board: finalProfile.board || 'CBSE',
+          subjects: finalProfile.subjects || [],
+          learningStyle: finalProfile.learningStyle || 'Text',
+          learningStyles: finalProfile.learningStyles || ['Text'],
+          pace: finalProfile.pace || 'Normal',
+          state: finalProfile.state || '',
+          city: finalProfile.city || '',
+          teachingLanguage: 'English',
+          contentMode: 'step-by-step',
+          fastTrackEnabled: false,
+          saveChatHistory: true,
+          studyStreaksEnabled: true,
+          breakRemindersEnabled: true,
+          masteryNudgesEnabled: true,
+          dataSharingEnabled: false,
           isGuest: true
         })
       });
@@ -556,6 +407,419 @@ export default function ChatShell({ subject, onBack }) {
     }
   }, [subject]);
 
+  // Handle profile collection responses
+  const handleProfileResponse = useCallback(async (response) => {
+    console.log('[ChatShell] handleProfileResponse called:', { response, profileStep, profileData });
+    
+    const userMessage = {
+      id: `user-${Date.now()}`,
+      content: response.trim(),
+      type: 'user',
+      messageType: 'text',
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+
+    if (profileStep === 'name') {
+      console.log('[ChatShell] Processing name step');
+      const nameParts = response.trim().split(' ');
+      
+      if (nameParts.length >= 2) {
+        // User provided both first and last name
+        const firstName = nameParts[0];
+        const lastName = nameParts.slice(1).join(' ');
+        const updatedProfile = { ...profileData, firstName, lastName };
+        
+        // Save name data and encourage user to ask another question
+        localStorage.setItem('guestProfile', JSON.stringify(updatedProfile));
+        
+        const thankYouMessage = {
+          id: `profile-name-thanks-${Date.now()}`,
+          content: `Nice to meet you, ${firstName} ${lastName}! Feel free to ask me any other doubt in this subject!`,
+          type: 'ai',
+          messageType: 'text',
+          timestamp: new Date(),
+          subject: subject
+        };
+        
+        setMessages(prev => [...prev, thankYouMessage]);
+        setProfileStep(null);
+        setWaitingForProfileResponse(false);
+        setProfileData({});
+        console.log('[ChatShell] Name collection complete, encouraging next question');
+      } else {
+        // User provided only first name
+        const firstName = nameParts[0];
+        const updatedProfile = { ...profileData, firstName };
+        
+        // Save first name and encourage user to ask another question
+        localStorage.setItem('guestProfile', JSON.stringify(updatedProfile));
+        
+        const thankYouMessage = {
+          id: `profile-name-thanks-${Date.now()}`,
+          content: `Nice to meet you, ${firstName}! Feel free to ask me any other doubt in this subject!`,
+          type: 'ai',
+          messageType: 'text',
+          timestamp: new Date(),
+          subject: subject
+        };
+        
+        setMessages(prev => [...prev, thankYouMessage]);
+        setProfileStep(null);
+        setWaitingForProfileResponse(false);
+        setProfileData({});
+        console.log('[ChatShell] First name collected, encouraging next question');
+      }
+      
+    } else if (profileStep === 'role_grade') {
+      // Handle role selection
+      const role = response.trim().toLowerCase();
+      let validRole = 'other';
+      
+      if (role.includes('student')) validRole = 'student';
+      else if (role.includes('parent')) validRole = 'parent';
+      else if (role.includes('teacher')) validRole = 'teacher';
+      
+      const updatedProfile = { ...profileData, role: validRole };
+      
+      // Save the role and encourage user to ask another question
+      localStorage.setItem('guestProfile', JSON.stringify(updatedProfile));
+      
+      const thankYouMessage = {
+        id: `profile-role-thanks-${Date.now()}`,
+        content: `Thank you! I've noted that you're a ${validRole}. Feel free to ask me any other doubt in this subject!`,
+        type: 'ai',
+        messageType: 'text',
+        timestamp: new Date(),
+        subject: subject
+      };
+      
+      setMessages(prev => [...prev, thankYouMessage]);
+      setProfileStep(null);
+      setWaitingForProfileResponse(false);
+      setProfileData({});
+      
+    } else if (profileStep === 'grade') {
+      // Handle grade selection
+      const grade = response.trim();
+      const updatedProfile = { ...profileData, grade };
+      
+      // Save the grade and encourage user to ask another question
+      localStorage.setItem('guestProfile', JSON.stringify(updatedProfile));
+      
+      const thankYouMessage = {
+        id: `profile-grade-thanks-${Date.now()}`,
+        content: `Perfect! I've noted that you're in grade ${grade}. Feel free to ask me any other doubt in this subject!`,
+        type: 'ai',
+        messageType: 'text',
+        timestamp: new Date(),
+        subject: subject
+      };
+      
+      setMessages(prev => [...prev, thankYouMessage]);
+      setProfileStep(null);
+      setWaitingForProfileResponse(false);
+      setProfileData({});
+      
+    } else if (profileStep === 'board') {
+      // Handle board selection
+      const board = response.trim();
+      const updatedProfile = { ...profileData, board };
+      
+      // Save the board and encourage user to ask another question
+      localStorage.setItem('guestProfile', JSON.stringify(updatedProfile));
+      
+      const thankYouMessage = {
+        id: `profile-board-thanks-${Date.now()}`,
+        content: `Great! I've noted that you're studying under ${board}. Feel free to ask me any other doubt in this subject!`,
+        type: 'ai',
+        messageType: 'text',
+        timestamp: new Date(),
+        subject: subject
+      };
+      
+      setMessages(prev => [...prev, thankYouMessage]);
+      setProfileStep(null);
+      setWaitingForProfileResponse(false);
+      setProfileData({});
+      
+    } else if (profileStep === 'subjects') {
+      // Handle subjects selection
+      const subjectsText = response.trim();
+      // Parse subjects from the response
+      const subjects = subjectsText.split(/[,;]/).map(s => s.trim()).filter(s => s.length > 0);
+      const updatedProfile = { ...profileData, subjects };
+      
+      // Save the subjects and encourage user to ask another question
+      localStorage.setItem('guestProfile', JSON.stringify(updatedProfile));
+      
+      const thankYouMessage = {
+        id: `profile-subjects-thanks-${Date.now()}`,
+        content: `Excellent! I've noted your interest in: ${subjects.join(', ')}. Feel free to ask me any other doubt in this subject!`,
+        type: 'ai',
+        messageType: 'text',
+        timestamp: new Date(),
+        subject: subject
+      };
+      
+      setMessages(prev => [...prev, thankYouMessage]);
+      setProfileStep(null);
+      setWaitingForProfileResponse(false);
+      setProfileData({});
+      
+    } else if (profileStep === 'learning_style') {
+      // Handle learning style selection
+      const learningStyle = response.trim().toLowerCase();
+      let validStyle = 'Text';
+      
+      if (learningStyle.includes('visual')) validStyle = 'Visual';
+      else if (learningStyle.includes('voice') || learningStyle.includes('audio') || learningStyle.includes('listening')) validStyle = 'Voice';
+      else if (learningStyle.includes('hands') || learningStyle.includes('doing') || learningStyle.includes('activities')) validStyle = 'Kinesthetic';
+      
+      const updatedProfile = { ...profileData, learningStyle, learningStyles: [validStyle] };
+      
+      // Save the learning style and encourage user to ask another question
+      localStorage.setItem('guestProfile', JSON.stringify(updatedProfile));
+      
+      const thankYouMessage = {
+        id: `profile-learning-style-thanks-${Date.now()}`,
+        content: `Perfect! I've noted that you prefer ${validStyle} learning. I'll tailor my explanations accordingly. Feel free to ask me any other doubt in this subject!`,
+        type: 'ai',
+        messageType: 'text',
+        timestamp: new Date(),
+        subject: subject
+      };
+      
+      setMessages(prev => [...prev, thankYouMessage]);
+      setProfileStep(null);
+      setWaitingForProfileResponse(false);
+      setProfileData({});
+      
+    } else if (profileStep === 'pace') {
+      // Handle pace selection
+      const pace = response.trim().toLowerCase();
+      let validPace = 'Normal';
+      
+      if (pace.includes('fast') || pace.includes('quick')) validPace = 'Fast';
+      else if (pace.includes('detailed') || pace.includes('thorough')) validPace = 'Detailed';
+      
+      const updatedProfile = { ...profileData, pace };
+      
+      // Save the pace and encourage user to ask another question
+      localStorage.setItem('guestProfile', JSON.stringify(updatedProfile));
+      
+      const thankYouMessage = {
+        id: `profile-pace-thanks-${Date.now()}`,
+        content: `Great! I've noted that you prefer ${validPace} pace learning. Feel free to ask me any other doubt in this subject!`,
+        type: 'ai',
+        messageType: 'text',
+        timestamp: new Date(),
+        subject: subject
+      };
+      
+      setMessages(prev => [...prev, thankYouMessage]);
+      setProfileStep(null);
+      setWaitingForProfileResponse(false);
+      setProfileData({});
+      
+    } else if (profileStep === 'location') {
+      // Handle location selection
+      const state = response.trim();
+      const updatedProfile = { ...profileData, state };
+      
+      // Save the location and encourage user to ask another question
+      localStorage.setItem('guestProfile', JSON.stringify(updatedProfile));
+      
+      const thankYouMessage = {
+        id: `profile-location-thanks-${Date.now()}`,
+        content: `Excellent! I've noted that you're from ${state}. This will help me provide more relevant examples. Feel free to ask me any other doubt in this subject!`,
+        type: 'ai',
+        messageType: 'text',
+        timestamp: new Date(),
+        subject: subject
+      };
+      
+      setMessages(prev => [...prev, thankYouMessage]);
+      setProfileStep(null);
+      setWaitingForProfileResponse(false);
+      setProfileData({});
+      
+    } else if (profileStep === 'complete') {
+      // Complete profile collection and auto-register
+      const existingProfile = JSON.parse(localStorage.getItem('guestProfile') || '{}');
+      await completeProfileCollection(existingProfile);
+    }
+  }, [profileStep, subject, waitingForProfileResponse, completeProfileCollection]);
+
+  // Handle quiz responses
+  const handleQuizResponse = useCallback(async (response) => {
+    console.log('[ChatShell] handleQuizResponse called:', { response, quizStep, currentQuiz });
+    
+    const userMessage = {
+      id: `user-${Date.now()}`,
+      content: `I selected option ${response.trim()}`,
+      type: 'user',
+      messageType: 'text',
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+
+    if (quizStep === 'question') {
+      // User selected an option (response is already the option number as string)
+      const selectedOption = parseInt(response.trim()) - 1; // Convert to 0-based index
+      const isCorrect = selectedOption === currentQuiz.correct;
+      
+      // Show feedback
+      const feedbackMessage = {
+        id: `quiz-feedback-${Date.now()}`,
+        content: isCorrect 
+          ? `🎉 Correct! ${currentQuiz.explanation}` 
+          : `❌ Not quite right. The correct answer is: ${currentQuiz.explanation}`,
+        type: 'ai',
+        messageType: 'text',
+        timestamp: new Date(),
+        subject: subject
+      };
+      
+      setMessages(prev => [...prev, feedbackMessage]);
+      
+      // Move to profile collection
+      setQuizStep(null);
+      setWaitingForQuizResponse(false);
+      setCurrentQuiz(null);
+      setQuizCompletedForCurrentQuestion(true); // Mark quiz as completed for this question
+      
+      // Check if we should ask for profile info based on gotItCount
+      const existingProfile = JSON.parse(localStorage.getItem('guestProfile') || '{}');
+      const shouldAskProfile = shouldAskForProfileInfo(gotItCount, existingProfile);
+      
+      if (shouldAskProfile.ask) {
+        setProfileStep(shouldAskProfile.step);
+        setProfileData(existingProfile);
+        setWaitingForProfileResponse(true);
+        
+        const profileMessage = {
+          id: `profile-${shouldAskProfile.step}-${Date.now()}`,
+          content: shouldAskProfile.message,
+          type: 'ai',
+          messageType: 'text',
+          timestamp: new Date(),
+          subject: subject
+        };
+        
+        setMessages(prev => [...prev, profileMessage]);
+      } else {
+        // Encourage user to ask another question
+        const encourageMessage = {
+          id: `encourage-${Date.now()}`,
+          content: "Great! Feel free to ask me any other doubt in this subject!",
+          type: 'ai',
+          messageType: 'text',
+          timestamp: new Date(),
+          subject: subject
+        };
+        
+        setMessages(prev => [...prev, encourageMessage]);
+      }
+    }
+  }, [quizStep, currentQuiz, subject, gotItCount]);
+
+  // Determine when to ask for profile information based on gotItCount
+  const shouldAskForProfileInfo = useCallback((currentGotItCount, existingProfile) => {
+    console.log('[ChatShell] shouldAskForProfileInfo called:', { currentGotItCount, existingProfile });
+    
+    // First "Got it" (gotItCount = 1): Ask for name
+    if (currentGotItCount === 1 && (!existingProfile.firstName || !existingProfile.lastName)) {
+      return {
+        ask: true,
+        step: 'name',
+        message: "Great! I'd love to know your name so I can personalize our learning experience. What's your first name?"
+      };
+    }
+    
+    // Second "Got it" (gotItCount = 2): Ask for role
+    if (currentGotItCount === 2 && !existingProfile.role) {
+      return {
+        ask: true,
+        step: 'role_grade',
+        message: "Are you a student, parent, or teacher?"
+      };
+    }
+    
+    // Third "Got it" (gotItCount = 3): Ask for grade (if student)
+    if (currentGotItCount === 3 && existingProfile.role === 'student' && !existingProfile.grade) {
+      return {
+        ask: true,
+        step: 'grade',
+        message: "What grade are you in? (6-12)"
+      };
+    }
+    
+    // Fourth "Got it" (gotItCount = 4): Ask for board
+    if (currentGotItCount === 4 && !existingProfile.board) {
+      return {
+        ask: true,
+        step: 'board',
+        message: "Which board are you studying under? (CBSE, ICSE, State Board, IB, IGCSE, or Other)"
+      };
+    }
+    
+    // Fifth "Got it" (gotItCount = 5): Ask for subjects
+    if (currentGotItCount === 5 && (!existingProfile.subjects || existingProfile.subjects.length === 0)) {
+      return {
+        ask: true,
+        step: 'subjects',
+        message: "Which subjects are you most interested in? You can mention multiple subjects like Math, Science, English, etc."
+      };
+    }
+    
+    // Sixth "Got it" (gotItCount = 6): Ask for learning style
+    if (currentGotItCount === 6 && !existingProfile.learningStyle) {
+      return {
+        ask: true,
+        step: 'learning_style',
+        message: "How do you prefer to learn? (Visual - seeing diagrams, Voice - listening, Text - reading, or Hands-on - doing activities)"
+      };
+    }
+    
+    // Seventh "Got it" (gotItCount = 7): Ask for pace
+    if (currentGotItCount === 7 && !existingProfile.pace) {
+      return {
+        ask: true,
+        step: 'pace',
+        message: "What's your preferred learning pace? (Fast - quick answers, Normal - balanced, or Detailed - thorough explanations)"
+      };
+    }
+    
+    // Eighth "Got it" (gotItCount = 8): Ask for location
+    if (currentGotItCount === 8 && !existingProfile.state) {
+      return {
+        ask: true,
+        step: 'location',
+        message: "Which state are you from? This helps me provide more relevant examples."
+      };
+    }
+    
+    // Ninth "Got it" (gotItCount = 9): Complete profile and auto-register
+    if (currentGotItCount === 9 && existingProfile.firstName && existingProfile.role) {
+      return {
+        ask: true,
+        step: 'complete',
+        message: "Perfect! I have all the information I need to create your personalized learning profile. Let me set up your account!"
+      };
+    }
+    
+    // Don't ask for profile info yet
+    return {
+      ask: false,
+      step: null,
+      message: null
+    };
+  }, []);
+
+
   // Stream real AI response from orchestrator API with optimized SSE
   const streamRealAIResponse = useCallback(async (userInput, imageUrl, sessionId) => {
     console.log('[ChatShell] streamRealAIResponse called:', { userInput, sessionId, imageUrl });
@@ -589,12 +853,168 @@ export default function ChatShell({ subject, onBack }) {
     try {
       console.log('[ChatShell] Making solve request with:', { userInput, sessionId, imageUrl });
 
-      // Build URL parameters more safely
+      // Use POST request with body data instead of GET with query params
+      const requestBody = {
+        message: userInput,
+        sessionId: sessionId,
+        messageType: 'text',
+        userId: userId
+      };
+
+      // Only include imageUrl if it exists and is not too large for URL
+      if (imageUrl) {
+        // Check if imageUrl is a base64 data URL (which can be large)
+        if (imageUrl.startsWith('data:')) {
+          // For large base64 images, we need to use POST with body
+          // But EventSource doesn't support POST, so we'll use fetch with streaming
+          console.log('[ChatShell] Large image detected, using fetch instead of EventSource');
+          
+          const response = await fetch('/api/solve', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              ...requestBody,
+              imageUrl: imageUrl
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+
+          // Define cleanup function for fetch-based streaming
+          const fetchCleanup = () => {
+            setIsStreaming(false);
+            console.log('[ChatShell] Fetch cleanup called, setting hideQuickActions to false');
+            setHideQuickActions(false);
+          };
+
+          // Set timeout to ensure quick actions are shown even if stream doesn't complete
+          const streamTimeout = setTimeout(() => {
+            console.log('[ChatShell] Stream timeout, showing quick actions');
+            fetchCleanup();
+          }, 30000); // 30 second timeout
+
+          const processStream = async () => {
+            try {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) {
+                  // Stream completed - ensure quick actions are shown
+                  console.log('[ChatShell] Stream completed, showing quick actions');
+                  clearTimeout(streamTimeout);
+                  fetchCleanup();
+                  break;
+                }
+
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n');
+
+                for (const line of lines) {
+                  if (line.startsWith('data: ')) {
+                    try {
+                      const eventData = JSON.parse(line.slice(6));
+                      console.log('[ChatShell] Stream event received:', eventData.type, eventData.data);
+
+                      if (eventData.type === 'section' && eventData.data?.section) {
+                        const section = eventData.data.section;
+                        const sectionContent = `${section.title}\n\n${section.content}`;
+
+                        currentAIMessage = {
+                          ...currentAIMessage,
+                          content: sectionContent
+                        };
+
+                        setMessages(prev => {
+                          const newMessages = [...prev];
+                          const targetIndex = newMessages.findIndex(m => m.id === currentAIMessage.id);
+                          if (targetIndex >= 0 && targetIndex < newMessages.length) {
+                            newMessages[targetIndex] = { ...currentAIMessage };
+                          }
+                          return newMessages;
+                        });
+
+                      } else if (eventData.type === 'token' && eventData.data?.token) {
+                        const token = eventData.data.token;
+                        currentAIMessage = {
+                          ...currentAIMessage,
+                          content: currentAIMessage.content === "Geni Ma'am is thinking..."
+                            ? token
+                            : currentAIMessage.content + token
+                        };
+
+                        setMessages(prev => {
+                          const newMessages = [...prev];
+                          const targetIndex = newMessages.findIndex(m => m.id === currentAIMessage.id);
+                          if (targetIndex >= 0 && targetIndex < newMessages.length) {
+                            newMessages[targetIndex] = { ...currentAIMessage };
+                          }
+                          return newMessages;
+                        });
+
+                      } else if (eventData.type === 'final' || eventData.type === 'done') {
+                        clearTimeout(streamTimeout);
+                        fetchCleanup();
+                        setMessages(prev => {
+                          const newMessages = [...prev];
+                          const lastIndex = newMessages.length - 1;
+                          if (newMessages[lastIndex]?.type === 'ai') {
+                            newMessages[lastIndex] = {
+                              ...newMessages[lastIndex],
+                              content: newMessages[lastIndex].content || "Response completed."
+                            };
+                          }
+                          return newMessages;
+                        });
+                      } else if (eventData.type === 'error') {
+                        clearTimeout(streamTimeout);
+                        fetchCleanup();
+                        console.error('[ChatShell] Server error:', eventData.data);
+                        setMessages(prev => {
+                          const newMessages = [...prev];
+                          const lastIndex = newMessages.length - 1;
+                          if (newMessages[lastIndex]?.type === 'ai') {
+                            newMessages[lastIndex] = {
+                              ...newMessages[lastIndex],
+                              content: eventData.data?.error || "I encountered an error processing your question. Please try again."
+                            };
+                          }
+                          return newMessages;
+                        });
+                      }
+                    } catch (e) {
+                      console.warn('Failed to parse stream event:', line, e);
+                    }
+                  }
+                }
+              }
+            } catch (error) {
+              console.error('Stream processing error:', error);
+              clearTimeout(streamTimeout);
+              fetchCleanup();
+            }
+          };
+
+          processStream();
+          return;
+        } else {
+          // For small image URLs, we can still use EventSource
+          requestBody.imageUrl = imageUrl;
+        }
+      }
+
+      // For text-only messages or small image URLs, use EventSource
       const params = new URLSearchParams();
-      params.set('message', userInput);
-      if (sessionId) params.set('sessionId', sessionId);
-      if (imageUrl) params.set('imageUrl', imageUrl);
-      if (userId) params.set('userId', userId);
+      Object.entries(requestBody).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          params.set(key, value);
+        }
+      });
 
       const eventSource = new EventSource(`/api/solve?${params.toString()}`);
       currentSSERef.current = eventSource;
@@ -608,6 +1028,7 @@ export default function ChatShell({ subject, onBack }) {
         }
         setIsStreaming(false);
         // Show quick actions when streaming is done
+        console.log('[ChatShell] Cleanup called, setting hideQuickActions to false');
         setHideQuickActions(false);
       };
 
@@ -948,6 +1369,18 @@ export default function ChatShell({ subject, onBack }) {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Debug button to test quick actions */}
+            <button
+              onClick={() => {
+                console.log('[ChatShell] Debug: Force showing quick actions');
+                setHideQuickActions(false);
+                setIsStreaming(false);
+              }}
+              className="px-3 py-1 text-xs bg-white/20 text-white rounded hover:bg-white/30"
+            >
+              Show Quick Actions
+            </button>
+            
             {/* Network status */}
             <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full ${
               isOnline
@@ -1022,6 +1455,14 @@ export default function ChatShell({ subject, onBack }) {
       <SettingsModal
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}
+      />
+
+      {/* Vision Input Modal */}
+      <VisionInputModal
+        isOpen={showVisionInput}
+        onClose={() => setShowVisionInput(false)}
+        onComplete={handleVisionComplete}
+        onError={handleVisionError}
       />
 
     </div>

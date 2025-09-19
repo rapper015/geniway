@@ -71,21 +71,40 @@ const MessageList = forwardRef(({
           // Check if this AI message is a response to a user question
           const previousMessage = index > 0 ? messages[index - 1] : null;
           const messageIdString = String(message.id || '');
+          const messageContent = message.content || '';
+          
+          // Check if this is a system message that shouldn't show quick actions
+          const isSystemMessage = messageIdString.includes('welcome') || 
+            messageIdString.includes('profile') || 
+            messageIdString.includes('quiz') || 
+            messageIdString.includes('ack') || 
+            messageIdString.includes('thank') || 
+            messageIdString.includes('error') ||
+            messageContent.includes('Thank you for providing') ||
+            messageContent.includes('Great! Now I\'d love to know') ||
+            messageContent.includes('Nice to meet you') ||
+            messageContent.includes('What\'s your') ||
+            messageContent.includes('are you a student') ||
+            messageContent.includes('What grade') ||
+            messageContent.includes('🎉 Correct!') ||
+            messageContent.includes('❌ Not quite right');
+          
           const isResponseToUserQuestion = previousMessage && 
             previousMessage.type === 'user' && 
             message.type === 'ai' &&
-            !messageIdString.includes('welcome') && // Not a welcome message
-            !messageIdString.includes('profile') && // Not a profile collection message
-            !messageIdString.includes('quiz') && // Not a quiz message
-            !messageIdString.includes('ack') && // Not an acknowledgment message
-            !messageIdString.includes('thank') && // Not a thank you message
-            !messageIdString.includes('error'); // Not an error message
+            !isSystemMessage; // Not a system message
           
           console.log('[MessageList] Rendering message:', { 
             index, 
             message: { id: message.id, type: message.type, content: message.content?.substring(0, 50) },
             isResponseToUserQuestion,
-            previousMessage: previousMessage ? { type: previousMessage.type, id: previousMessage.id } : null
+            isLatestBotMessage,
+            isSystemMessage,
+            hideQuickActions,
+            isStreaming,
+            onQuickReplyClick: !!onQuickReplyClick,
+            previousMessage: previousMessage ? { type: previousMessage.type, id: previousMessage.id } : null,
+            shouldShowQuickActions: isLatestBotMessage && isResponseToUserQuestion && onQuickReplyClick && !hideQuickActions && !isStreaming
           });
           
           return (

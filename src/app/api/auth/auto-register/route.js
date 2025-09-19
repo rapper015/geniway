@@ -5,7 +5,28 @@ import jwt from 'jsonwebtoken';
 
 export async function POST(request) {
   try {
-    const { firstName, lastName, role, grade, isGuest = true } = await request.json();
+    const { 
+      firstName, 
+      lastName, 
+      role, 
+      grade, 
+      board,
+      subjects,
+      learningStyle,
+      learningStyles,
+      pace,
+      state,
+      city,
+      teachingLanguage,
+      contentMode,
+      fastTrackEnabled,
+      saveChatHistory,
+      studyStreaksEnabled,
+      breakRemindersEnabled,
+      masteryNudgesEnabled,
+      dataSharingEnabled,
+      isGuest = true 
+    } = await request.json();
 
     if (!firstName || !lastName || !role) {
       return NextResponse.json(
@@ -29,19 +50,22 @@ export async function POST(request) {
       role: role,
       grade: grade || null,
       isGuest: isGuest,
-      board: 'CBSE',
+      board: board || 'CBSE',
+      subjects: subjects || [],
+      state: state || '',
+      city: city || '',
       langPref: 'en',
-      teachingLanguage: 'English',
-      pace: 'Normal',
-      learningStyle: 'Text',
-      learningStyles: ['Text'],
-      contentMode: 'step-by-step',
-      fastTrackEnabled: false,
-      saveChatHistory: true,
-      studyStreaksEnabled: true,
-      breakRemindersEnabled: true,
-      masteryNudgesEnabled: true,
-      dataSharingEnabled: false,
+      teachingLanguage: teachingLanguage || 'English',
+      pace: pace || 'Normal',
+      learningStyle: learningStyle || 'Text',
+      learningStyles: learningStyles || ['Text'],
+      contentMode: contentMode || 'step-by-step',
+      fastTrackEnabled: fastTrackEnabled || false,
+      saveChatHistory: saveChatHistory !== undefined ? saveChatHistory : true,
+      studyStreaksEnabled: studyStreaksEnabled !== undefined ? studyStreaksEnabled : true,
+      breakRemindersEnabled: breakRemindersEnabled !== undefined ? breakRemindersEnabled : true,
+      masteryNudgesEnabled: masteryNudgesEnabled !== undefined ? masteryNudgesEnabled : true,
+      dataSharingEnabled: dataSharingEnabled || false,
       ageBand: grade && grade <= 8 ? '6-10' : grade && grade <= 10 ? '11-14' : '15-18',
       preferences: {
         language: 'en',

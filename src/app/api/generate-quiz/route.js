@@ -7,7 +7,7 @@ const openai = new OpenAI({
 
 export async function POST(request) {
   try {
-    const { subject, originalQuestion, context } = await request.json();
+    const { subject, originalQuestion, aiResponse, context } = await request.json();
 
     if (!originalQuestion) {
       return NextResponse.json(
@@ -16,16 +16,18 @@ export async function POST(request) {
       );
     }
 
-    // Create a contextual quiz generation prompt
-    const prompt = `You are Geni Ma'am, a warm Indian tutor. Generate a contextual quiz question based on the student's original question.
+    // Create a contextual quiz generation prompt based on AI's response
+    const prompt = `You are Geni Ma'am, a warm Indian tutor. Generate a contextual quiz question based on the AI's response to the student's question.
 
 STUDENT'S ORIGINAL QUESTION: "${originalQuestion}"
+AI'S RESPONSE: "${aiResponse || 'No AI response provided'}"
 SUBJECT: ${subject || 'general'}
 CONTEXT: ${context || 'No additional context'}
 
 **REQUIREMENTS:**
-- Generate ONE MCQ question that tests understanding of the specific concept from the student's question
-- The question must be directly related to "${originalQuestion}"
+- Generate ONE MCQ question that tests understanding of the specific concepts explained in the AI's response
+- The question must be directly related to the content and concepts covered in the AI's response
+- Focus on the educational content that was actually explained, not just the original question
 - Provide exactly 4 options (A, B, C, D)
 - Include the correct answer and explanation
 - Make it appropriate for Class 10 CBSE level
@@ -44,9 +46,11 @@ CONTEXT: ${context || 'No additional context'}
 }
 
 **EXAMPLES:**
-If student asked about "Newton's First Law", generate a question about inertia or objects at rest.
-If student asked about "photosynthesis", generate a question about the process or requirements.
-If student asked about "quadratic equations", generate a question about solving or identifying them.
+If AI explained "Newton's First Law" and mentioned inertia, generate a question about inertia or objects at rest.
+If AI explained "photosynthesis" and mentioned the process, generate a question about the process or requirements.
+If AI explained "quadratic equations" and showed how to solve them, generate a question about solving or identifying them.
+
+**IMPORTANT:** Base your question on what the AI actually explained in their response, not just the original question topic.
 
 Generate a contextual quiz question now:`;
 
@@ -76,17 +80,18 @@ Generate a contextual quiz question now:`;
       console.error('Error parsing quiz JSON:', parseError);
       console.error('Raw response:', content);
       
-      // Fallback to a simple contextual question
+      // Fallback to a simple contextual question based on AI response
+      const responseSummary = aiResponse ? aiResponse.substring(0, 100) + "..." : "the topic we discussed";
       quizData = {
-        question: `Based on your question about "${originalQuestion}", which of the following best describes the main concept?`,
+        question: `Based on the explanation about "${responseSummary}", which of the following best describes the main concept?`,
         options: [
           "The primary principle we discussed",
-          "A related but different concept",
+          "A related but different concept", 
           "A common misconception about this topic",
           "An advanced application of this concept"
         ],
         correct: 0,
-        explanation: "This relates to the core concept we just covered in your question."
+        explanation: "This relates to the core concept we just covered in the AI's response."
       };
     }
 
@@ -105,9 +110,12 @@ Generate a contextual quiz question now:`;
   } catch (error) {
     console.error('Error generating quiz:', error);
     
-    // Return a fallback quiz question
+    // Return a fallback quiz question based on AI response
+    const { aiResponse } = await request.json().catch(() => ({}));
+    const responseSummary = aiResponse ? aiResponse.substring(0, 50) + "..." : "our discussion";
+    
     const fallbackQuiz = {
-      question: "Based on our discussion, which of the following is most relevant?",
+      question: `Based on the explanation about "${responseSummary}", which of the following is most relevant?`,
       options: [
         "The main concept we covered",
         "A related application",
@@ -115,7 +123,7 @@ Generate a contextual quiz question now:`;
         "An advanced topic"
       ],
       correct: 0,
-      explanation: "This relates to the core concept we just discussed."
+      explanation: "This relates to the core concept we just covered in the AI's response."
     };
 
     return NextResponse.json(fallbackQuiz);
