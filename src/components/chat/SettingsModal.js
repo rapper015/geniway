@@ -44,7 +44,7 @@ const languages = [
   'Gujarati', 'Kannada', 'Malayalam', 'Punjabi', 'Urdu'
 ];
 
-export default function SettingsModal({ isOpen, onClose, trigger }) {
+export default function SettingsModal({ isOpen, onClose, trigger, localProfileData = {} }) {
   const { user, isAuthenticated, isGuest, guestUser } = useAuth();
   
   const [profile, setProfile] = useState(null);
@@ -75,74 +75,35 @@ export default function SettingsModal({ isOpen, onClose, trigger }) {
     }
   }, [isAuthenticated, user, isGuest, guestUser]);
 
-  // Load profile data when modal opens
+  // Load profile data when modal opens or local profile data changes
   useEffect(() => {
     if (isOpen && effectiveUserId) {
       loadProfile();
     }
-  }, [isOpen, effectiveUserId]);
+  }, [isOpen, effectiveUserId, localProfileData]);
 
-  const loadProfile = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(`/api/profile/${effectiveUserId}`);
-      if (response.ok) {
-        const data = await response.json();
-        setProfile(data.profile);
-        setUserData(data.user);
-      } else {
-        // Create default profile for new users
-        const defaultProfile = {
-          user_id: effectiveUserId,
-          first_name: '',
-          last_name: '',
-          preferred_name: '',
-          whatsapp_number: '',
-          state: '',
-          city: '',
-          board: 'CBSE',
-          grade: null,
-          subjects: [],
-          lang_pref: 'en',
-          teaching_language: 'English',
-          pace: 'Normal',
-          learning_style: 'Text',
-          learning_styles: ['Text'],
-          content_mode: 'step-by-step',
-          fast_track_enabled: false,
-          save_chat_history: true,
-          study_streaks_enabled: true,
-          break_reminders_enabled: true,
-          mastery_nudges_enabled: true,
-          data_sharing_enabled: false
-        };
-        setProfile(defaultProfile);
-        setUserData({
-          id: effectiveUserId,
-          email: isAuthenticated ? user?.email : `${effectiveUserId}@geniway.com`,
-          role: 'student',
-          age_band: '11-14'
-        });
-      }
-    } catch (error) {
-      console.error('Error loading profile:', error);
-      // Create default profile on error
-      const defaultProfile = {
+  // Also update profile when localProfileData changes (even if modal is closed)
+  useEffect(() => {
+    console.log('[SettingsModal] localProfileData changed:', localProfileData);
+    if (localProfileData && Object.keys(localProfileData).length > 0) {
+      // Create profile from local data
+      const profileFromLocalData = {
         user_id: effectiveUserId,
-        first_name: '',
-        last_name: '',
+        first_name: localProfileData.firstName || '',
+        last_name: localProfileData.lastName || '',
+        name: localProfileData.name || '',
         preferred_name: '',
         whatsapp_number: '',
-        state: '',
-        city: '',
-        board: 'CBSE',
-        grade: null,
-        subjects: [],
+        state: localProfileData.state || '',
+        city: localProfileData.city || '',
+        board: localProfileData.board || 'CBSE',
+        grade: localProfileData.grade || null,
+        subjects: localProfileData.subjects || [],
         lang_pref: 'en',
         teaching_language: 'English',
-        pace: 'Normal',
-        learning_style: 'Text',
-        learning_styles: ['Text'],
+        pace: localProfileData.pace || 'Normal',
+        learning_style: localProfileData.learningStyle || 'Text',
+        learning_styles: localProfileData.learningStyles || ['Text'],
         content_mode: 'step-by-step',
         fast_track_enabled: false,
         save_chat_history: true,
@@ -151,13 +112,53 @@ export default function SettingsModal({ isOpen, onClose, trigger }) {
         mastery_nudges_enabled: true,
         data_sharing_enabled: false
       };
-      setProfile(defaultProfile);
+      
+      console.log('[SettingsModal] Updating profile with:', profileFromLocalData);
+      setProfile(profileFromLocalData);
+    }
+  }, [localProfileData, effectiveUserId]);
+
+  const loadProfile = async () => {
+    setLoading(true);
+    try {
+      // For now, skip API calls and just use local profile data
+      // Create profile from local data only
+      const profileFromLocalData = {
+        user_id: effectiveUserId,
+        first_name: localProfileData.firstName || '',
+        last_name: localProfileData.lastName || '',
+        name: localProfileData.name || '',
+        preferred_name: '',
+        whatsapp_number: '',
+        state: localProfileData.state || '',
+        city: localProfileData.city || '',
+        board: localProfileData.board || 'CBSE',
+        grade: localProfileData.grade || null,
+        subjects: localProfileData.subjects || [],
+        lang_pref: 'en',
+        teaching_language: 'English',
+        pace: localProfileData.pace || 'Normal',
+        learning_style: localProfileData.learningStyle || 'Text',
+        learning_styles: localProfileData.learningStyles || ['Text'],
+        content_mode: 'step-by-step',
+        fast_track_enabled: false,
+        save_chat_history: true,
+        study_streaks_enabled: true,
+        break_reminders_enabled: true,
+        mastery_nudges_enabled: true,
+        data_sharing_enabled: false
+      };
+      
+      setProfile(profileFromLocalData);
       setUserData({
         id: effectiveUserId,
         email: isAuthenticated ? user?.email : `${effectiveUserId}@geniway.com`,
-        role: 'student',
-        age_band: '11-14'
+        role: localProfileData.role || 'student',
+        name: localProfileData.name || 'Guest User'
       });
+      
+    } catch (error) {
+      console.error('Error loading profile:', error);
     } finally {
       setLoading(false);
     }

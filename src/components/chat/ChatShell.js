@@ -30,8 +30,19 @@ export default function ChatShell({ subject, onBack }) {
   const [showVisionInput, setShowVisionInput] = useState(false);
   const [failedMessages, setFailedMessages] = useState([]);
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsRefreshKey, setSettingsRefreshKey] = useState(0);
   const [profileStep, setProfileStep] = useState(null); // null, 'name', 'role_grade'
-  const [profileData, setProfileData] = useState({});
+  const [profileData, setProfileData] = useState(() => {
+    // Initialize with existing localStorage data
+    const existingProfile = JSON.parse(localStorage.getItem('guestProfile') || '{}');
+    console.log('[ChatShell] Initializing profile data:', existingProfile);
+    return existingProfile;
+  });
+  
+  // Debug: Log profile data changes
+  useEffect(() => {
+    console.log('[ChatShell] Profile data updated:', profileData);
+  }, [profileData]);
   const [gotItCount, setGotItCount] = useState(0);
   const [waitingForProfileResponse, setWaitingForProfileResponse] = useState(false);
   const [fastTrackMode, setFastTrackMode] = useState(false);
@@ -325,6 +336,25 @@ export default function ChatShell({ subject, onBack }) {
     streamRealAIResponse(text, type === "image" ? metadata?.imageUrl : undefined, sessionId);
   }, [currentSessionId, isStreaming, showOnboarding, subject, userId, isAuthenticated, waitingForProfileResponse, profileStep, waitingForQuizResponse, quizStep]);
 
+  // Update user profile in local state (no API calls for now)
+  const updateUserProfile = useCallback((profileData) => {
+    // Update local profile state
+    setProfileData(prev => {
+      const newProfileData = {
+        ...prev,
+        ...profileData
+      };
+      
+      // Also update localStorage immediately
+      localStorage.setItem('guestProfile', JSON.stringify(newProfileData));
+      
+      return newProfileData;
+    });
+    
+    // Trigger settings modal refresh
+    setSettingsRefreshKey(prev => prev + 1);
+  }, []);
+
   // Complete profile collection and create account
   const completeProfileCollection = useCallback(async (finalProfile) => {
     // Save final profile
@@ -434,6 +464,13 @@ export default function ChatShell({ subject, onBack }) {
         // Save name data and encourage user to ask another question
         localStorage.setItem('guestProfile', JSON.stringify(updatedProfile));
         
+        // Update user profile in local state
+        updateUserProfile({
+          firstName: firstName,
+          lastName: lastName,
+          name: `${firstName} ${lastName}`
+        });
+        
         const thankYouMessage = {
           id: `profile-name-thanks-${Date.now()}`,
           content: `Nice to meet you, ${firstName} ${lastName}! Feel free to ask me any other doubt in this subject!`,
@@ -455,6 +492,12 @@ export default function ChatShell({ subject, onBack }) {
         
         // Save first name and encourage user to ask another question
         localStorage.setItem('guestProfile', JSON.stringify(updatedProfile));
+        
+        // Update user profile in local state
+        updateUserProfile({
+          firstName: firstName,
+          name: firstName
+        });
         
         const thankYouMessage = {
           id: `profile-name-thanks-${Date.now()}`,
@@ -486,6 +529,11 @@ export default function ChatShell({ subject, onBack }) {
       // Save the role and encourage user to ask another question
       localStorage.setItem('guestProfile', JSON.stringify(updatedProfile));
       
+      // Update user profile in local state
+      updateUserProfile({
+        role: validRole
+      });
+      
       const thankYouMessage = {
         id: `profile-role-thanks-${Date.now()}`,
         content: `Thank you! I've noted that you're a ${validRole}. Feel free to ask me any other doubt in this subject!`,
@@ -508,6 +556,11 @@ export default function ChatShell({ subject, onBack }) {
       // Save the grade and encourage user to ask another question
       localStorage.setItem('guestProfile', JSON.stringify(updatedProfile));
       
+      // Update user profile in local state
+      updateUserProfile({
+        grade: parseInt(grade)
+      });
+      
       const thankYouMessage = {
         id: `profile-grade-thanks-${Date.now()}`,
         content: `Perfect! I've noted that you're in grade ${grade}. Feel free to ask me any other doubt in this subject!`,
@@ -529,6 +582,11 @@ export default function ChatShell({ subject, onBack }) {
       
       // Save the board and encourage user to ask another question
       localStorage.setItem('guestProfile', JSON.stringify(updatedProfile));
+      
+      // Update user profile in local state
+      updateUserProfile({
+        board: board
+      });
       
       const thankYouMessage = {
         id: `profile-board-thanks-${Date.now()}`,
@@ -553,6 +611,11 @@ export default function ChatShell({ subject, onBack }) {
       
       // Save the subjects and encourage user to ask another question
       localStorage.setItem('guestProfile', JSON.stringify(updatedProfile));
+      
+      // Update user profile in local state
+      updateUserProfile({
+        subjects: subjects
+      });
       
       const thankYouMessage = {
         id: `profile-subjects-thanks-${Date.now()}`,
@@ -582,6 +645,12 @@ export default function ChatShell({ subject, onBack }) {
       // Save the learning style and encourage user to ask another question
       localStorage.setItem('guestProfile', JSON.stringify(updatedProfile));
       
+      // Update user profile in local state
+      updateUserProfile({
+        learningStyle: validStyle,
+        learningStyles: [validStyle]
+      });
+      
       const thankYouMessage = {
         id: `profile-learning-style-thanks-${Date.now()}`,
         content: `Perfect! I've noted that you prefer ${validStyle} learning. I'll tailor my explanations accordingly. Feel free to ask me any other doubt in this subject!`,
@@ -609,6 +678,11 @@ export default function ChatShell({ subject, onBack }) {
       // Save the pace and encourage user to ask another question
       localStorage.setItem('guestProfile', JSON.stringify(updatedProfile));
       
+      // Update user profile in local state
+      updateUserProfile({
+        pace: validPace
+      });
+      
       const thankYouMessage = {
         id: `profile-pace-thanks-${Date.now()}`,
         content: `Great! I've noted that you prefer ${validPace} pace learning. Feel free to ask me any other doubt in this subject!`,
@@ -631,6 +705,11 @@ export default function ChatShell({ subject, onBack }) {
       // Save the location and encourage user to ask another question
       localStorage.setItem('guestProfile', JSON.stringify(updatedProfile));
       
+      // Update user profile in local state
+      updateUserProfile({
+        state: state
+      });
+      
       const thankYouMessage = {
         id: `profile-location-thanks-${Date.now()}`,
         content: `Excellent! I've noted that you're from ${state}. This will help me provide more relevant examples. Feel free to ask me any other doubt in this subject!`,
@@ -650,7 +729,7 @@ export default function ChatShell({ subject, onBack }) {
       const existingProfile = JSON.parse(localStorage.getItem('guestProfile') || '{}');
       await completeProfileCollection(existingProfile);
     }
-  }, [profileStep, subject, waitingForProfileResponse, completeProfileCollection]);
+  }, [profileStep, subject, waitingForProfileResponse, completeProfileCollection, updateUserProfile]);
 
   // Handle quiz responses
   const handleQuizResponse = useCallback(async (response) => {
@@ -1453,8 +1532,10 @@ export default function ChatShell({ subject, onBack }) {
 
       {/* Settings Modal */}
       <SettingsModal
+        key={settingsRefreshKey}
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}
+        localProfileData={profileData}
       />
 
       {/* Vision Input Modal */}
