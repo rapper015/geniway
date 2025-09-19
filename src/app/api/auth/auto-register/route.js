@@ -67,6 +67,16 @@ export async function POST(request) {
       masteryNudgesEnabled: masteryNudgesEnabled !== undefined ? masteryNudgesEnabled : true,
       dataSharingEnabled: dataSharingEnabled || false,
       ageBand: grade && grade <= 8 ? '6-10' : grade && grade <= 10 ? '11-14' : '15-18',
+      // Profile completion tracking
+      profileCompletionStep: 9, // Completed all 9 steps
+      profileCompleted: true,
+      // Learning analytics
+      totalQuestionsAsked: 0,
+      totalQuizzesCompleted: 0,
+      averageQuizScore: 0,
+      // Session information
+      lastActiveSession: new Date(),
+      totalSessions: 1,
       preferences: {
         language: 'en',
         notifications: true

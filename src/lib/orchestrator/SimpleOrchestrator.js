@@ -13,7 +13,26 @@ export class SimpleOrchestrator {
     });
     
     // Geni Ma'am system prompt
-    this.systemPrompt = "You are Geni Ma'am, a warm and knowledgeable Indian tutor specializing in CBSE curriculum for students grades 6-12. Provide clear, educational explanations with appropriate scaffolding.";
+    this.systemPrompt = `You are Geni Ma'am, a warm and knowledgeable Indian tutor specializing in CBSE curriculum for students grades 6-12. 
+
+**CORE IDENTITY:**
+- You are an Indian educator who understands Indian culture, values, and educational system
+- You use Indian names, places, and cultural references in your examples
+- You adapt your explanations to the student's grade level, board, and learning preferences
+- You provide clear, educational explanations with appropriate scaffolding
+
+**INDIAN CONTEXT GUIDELINES:**
+- Always use Indian names (Priya, Arjun, Sita, Raj, Ananya, etc.) in examples
+- Reference Indian cities and states (Delhi, Mumbai, Bangalore, Chennai, etc.)
+- Use Indian currency (₹), measurements, and cultural contexts
+- Make examples relevant to Indian students' daily experiences
+- Use Indian educational terminology and board-specific content
+
+**PERSONALIZATION:**
+- Adapt language complexity based on student's grade level
+- Adjust explanation depth based on learning pace preference
+- Incorporate learning style preferences (Visual, Voice, Text, Kinesthetic)
+- Use location-specific examples when available`;
     
     // Section types in US-3.5 scaffolding framework
     this.sectionTypes = {
@@ -387,6 +406,36 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
 
       console.log('[SimpleOrchestrator] Found messages:', messages.length);
 
+      // Fetch user profile information for personalization
+      let userProfile = null;
+      try {
+        if (studentInput.userId) {
+          userProfile = await User.findOne({ 
+            $or: [
+              { _id: studentInput.userId },
+              { email: studentInput.userId }
+            ]
+          });
+          console.log('[SimpleOrchestrator] User profile found:', userProfile ? 'Yes' : 'No');
+        }
+      } catch (profileError) {
+        console.error('[SimpleOrchestrator] Error fetching user profile:', profileError);
+      }
+
+      // Build personalized curriculum context
+      const curriculumContext = {
+        subject: session.subject || 'general',
+        class: userProfile?.grade?.toString() || '10',
+        board: userProfile?.board || 'CBSE',
+        language: userProfile?.langPref || 'en',
+        learningStyle: userProfile?.learningStyle || 'Text',
+        pace: userProfile?.pace || 'Normal',
+        state: userProfile?.state || '',
+        city: userProfile?.city || '',
+        role: userProfile?.role || 'student',
+        ageBand: userProfile?.ageBand || '11-14'
+      };
+
       return {
         sessionId: session._id.toString(),
         userId: studentInput.userId,
@@ -394,12 +443,8 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
         currentInput: studentInput.text,
         currentImageUrl: studentInput.imageUrl, // Include image data
         messageHistory: messages,
-        curriculumContext: {
-          subject: session.subject || 'general',
-          class: '10', // Default to class 10
-          board: 'CBSE',
-          language: 'en'
-        }
+        curriculumContext: curriculumContext,
+        userProfile: userProfile // Include full user profile for advanced personalization
       };
     } catch (error) {
       console.error('[SimpleOrchestrator] Error building tutoring context:', error);
@@ -576,6 +621,48 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
     }
   }
 
+  // Build personalized context based on user profile
+  buildPersonalizedContext(curriculumContext) {
+    const { class: grade, board, state, city, learningStyle, pace, role, ageBand } = curriculumContext;
+    
+    let context = `Student Profile:
+- Grade: Class ${grade}
+- Board: ${board}
+- Learning Style: ${learningStyle}
+- Pace Preference: ${pace}
+- Role: ${role}
+- Age Band: ${ageBand}`;
+
+    if (state) {
+      context += `\n- Location: ${city ? `${city}, ` : ''}${state}`;
+    }
+
+    // Add grade-specific guidance
+    if (parseInt(grade) <= 8) {
+      context += `\n- Use simple language and basic concepts appropriate for younger students`;
+    } else if (parseInt(grade) >= 11) {
+      context += `\n- Use advanced concepts and detailed explanations for senior students`;
+    }
+
+    // Add learning style guidance
+    if (learningStyle === 'Visual') {
+      context += `\n- Include visual descriptions and diagrams in explanations`;
+    } else if (learningStyle === 'Voice') {
+      context += `\n- Use conversational tone and audio-friendly explanations`;
+    } else if (learningStyle === 'Kinesthetic') {
+      context += `\n- Include hands-on activities and practical examples`;
+    }
+
+    // Add pace guidance
+    if (pace === 'Fast') {
+      context += `\n- Provide quick, direct answers without lengthy explanations`;
+    } else if (pace === 'Detailed') {
+      context += `\n- Provide thorough, comprehensive explanations with multiple examples`;
+    }
+
+    return context;
+  }
+
   // Section-specific prompt builders
   buildBigIdeaPrompt(input, imageUrl, curriculumContext, messageHistory) {
     const conversationContext = messageHistory.length > 0 
@@ -591,6 +678,9 @@ The student has uploaded an image. Please analyze the image carefully and provid
 - If the image contains text, equations, diagrams, or educational content, explain them clearly`
       : '';
 
+    // Build personalized context
+    const personalizedContext = this.buildPersonalizedContext(curriculumContext);
+
     return `You are Geni Ma'am, a warm Indian tutor. Generate a Big Idea section per US-3.5 scaffolding framework.
 
 ${conversationContext}
@@ -601,15 +691,25 @@ ${conversationContext}
 - REAL-WORLD CONNECTION: Link to student's prior knowledge or everyday examples relevant to Indian context
 - ACADEMIC TONE: Appropriate for Class ${curriculumContext.class} (${curriculumContext.board} board)
 
+**PERSONALIZED CONTEXT:**
+${personalizedContext}
+
 **CONTENT GUIDELINES:**
 Subject: ${curriculumContext.subject} | Language: ${curriculumContext.language === 'hi' ? 'Hindi' : curriculumContext.language === 'hinglish' ? 'Hinglish' : 'English'}
 Topic: ${curriculumContext.subject} | Original: "${input}"${imageContext}
+
+**INDIAN CONTEXT REQUIREMENTS:**
+- Use Indian names (like Priya, Arjun, Sita, Raj, etc.) in examples
+- Reference Indian places (like Delhi, Mumbai, Bangalore, Chennai, etc.)
+- Use Indian cultural references and examples
+- Make examples relevant to Indian students' experiences
+- Use Indian currency (₹), measurements, and contexts
 
 **OUTPUT FORMAT:**
 Provide clear, concise explanation of the core concept in exactly 120 words or fewer. Focus on:
 1. Main concept definition  
 2. Why it matters
-3. One concrete real-world relevant example
+3. One concrete real-world relevant example with Indian context
 4. Connection to student's question${imageUrl ? ' and the uploaded image' : ''}`;
   }
 
@@ -629,11 +729,17 @@ The student has uploaded an image. Please analyze the image and provide step-by-
     // Check if user specifically asked for detailed steps
     const isDetailedStepsRequest = /detailed steps|show detailed steps|break it down|explain step by step|walk me through/i.test(input);
 
+    // Build personalized context
+    const personalizedContext = this.buildPersonalizedContext(curriculumContext);
+
     return `You are Geni Ma'am. Here's the complete conversation context:
 
 ${conversationContext}
 
 EXAMPLE SECTION (3-5 numbered steps): Provide a ${isDetailedStepsRequest ? 'detailed, comprehensive' : 'clear'} step-by-step example based on the complete conversation history.${imageContext}
+
+**PERSONALIZED CONTEXT:**
+${personalizedContext}
 
 Context Details:
 Subject: ${curriculumContext.subject} (Class ${curriculumContext.class}) 
@@ -641,18 +747,26 @@ Topic: ${curriculumContext.subject}
 Board: ${curriculumContext.board}
 Language: ${curriculumContext.language === 'hi' ? 'Hindi' : curriculumContext.language === 'hinglish' ? 'Hinglish' : 'English'}
 
+**INDIAN CONTEXT REQUIREMENTS:**
+- Use Indian names (like Priya, Arjun, Sita, Raj, etc.) in examples
+- Reference Indian places (like Delhi, Mumbai, Bangalore, Chennai, etc.)
+- Use Indian cultural references and examples
+- Make examples relevant to Indian students' experiences
+- Use Indian currency (₹), measurements, and contexts
+
 IMPORTANT: 
 - Always reference the ORIGINAL question topic ("${input}")
 - If asking for "detailed steps", provide comprehensive, thorough steps with explanations
 - If asking for "simpler example", simplify the SAME topic, don't switch topics
 - Build on the previous explanation context provided
 - Each step should be clear, actionable, and educational${imageUrl ? '\n- Focus on the content visible in the uploaded image' : ''}
+- Use examples that are culturally relevant to Indian students
 
 Format as:
-Step 1: [Specific action] - [Clear reason and explanation]
-Step 2: [Specific action] - [Clear reason and explanation]
-Step 3: [Specific action] - [Clear reason and explanation]
-${isDetailedStepsRequest ? 'Step 4: [Additional detail] - [Further explanation]\nStep 5: [Final step] - [Summary and verification]' : ''}
+Step 1: [Specific action] - [Clear reason and explanation with Indian context]
+Step 2: [Specific action] - [Clear reason and explanation with Indian context]
+Step 3: [Specific action] - [Clear reason and explanation with Indian context]
+${isDetailedStepsRequest ? 'Step 4: [Additional detail] - [Further explanation with Indian context]\nStep 5: [Final step] - [Summary and verification with Indian context]' : ''}
 
 Focus specifically on the original topic: "${input}"${imageUrl ? ' and the uploaded image' : ''}`;
   }

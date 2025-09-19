@@ -146,6 +146,50 @@ const userSchema = new mongoose.Schema({
     default: '11-14'
   },
   
+  // Profile Collection Tracking
+  profileCompletionStep: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 9
+  },
+  profileCompleted: {
+    type: Boolean,
+    default: false
+  },
+  
+  // Additional Contact Information
+  phoneNumber: {
+    type: String,
+    trim: true
+  },
+  
+  // Learning Analytics
+  totalQuestionsAsked: {
+    type: Number,
+    default: 0
+  },
+  totalQuizzesCompleted: {
+    type: Number,
+    default: 0
+  },
+  averageQuizScore: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 100
+  },
+  
+  // Session Information
+  lastActiveSession: {
+    type: Date,
+    default: Date.now
+  },
+  totalSessions: {
+    type: Number,
+    default: 0
+  },
+  
   // Legacy preferences (for backward compatibility)
   preferences: {
     language: {
