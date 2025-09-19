@@ -62,14 +62,8 @@ export default function ChatShell({ subject, onBack }) {
     }
   }, [isAuthenticated, user, isGuest, guestUser]);
 
-  // Add subject-specific welcome message
-  useEffect(() => {
-    if (messages.length === 0 && subject) {
-      addWelcomeMessage();
-    }
-  }, [subject, messages.length]);
-
   const addWelcomeMessage = useCallback(() => {
+    console.log('[ChatShell] addWelcomeMessage called with subject:', subject);
     const subjectMessages = {
       'mathematics': "Hi! I'm Geni Ma'am, your Math tutor. I'm here to help you with all your Math doubts. What would you like to learn today?",
       'science': "Hi! I'm Geni Ma'am, your Science tutor. I'm here to help you with Physics, Chemistry, and Biology. What's your doubt in Science?",
@@ -88,8 +82,18 @@ export default function ChatShell({ subject, onBack }) {
       subject: subject
     };
 
+    console.log('[ChatShell] Setting welcome message:', aiMessage);
     setMessages([aiMessage]);
+    setShowOnboarding(false); // Hide onboarding screen to show the welcome message
   }, [subject]);
+
+  // Add subject-specific welcome message immediately when component mounts
+  useEffect(() => {
+    if (subject && messages.length === 0) {
+      console.log('[ChatShell] Adding welcome message for subject:', subject);
+      addWelcomeMessage();
+    }
+  }, [subject, messages.length, addWelcomeMessage]);
 
   // Network status monitoring
   useEffect(() => {
@@ -139,64 +143,50 @@ export default function ChatShell({ subject, onBack }) {
     }
   }, [messages]);
 
-  // Generate quiz question based on subject and recent conversation
-  const generateQuizQuestion = useCallback((subject, recentMessages) => {
-    const quizQuestions = {
-      'mathematics': [
-        {
-          question: "What is 2 + 2?",
-          options: ["3", "4", "5", "6"],
-          correct: 1,
-          explanation: "2 + 2 = 4"
-        },
-        {
-          question: "What is 5 × 3?",
-          options: ["12", "15", "18", "20"],
-          correct: 1,
-          explanation: "5 × 3 = 15"
-        },
-        {
-          question: "What is 10 - 4?",
-          options: ["5", "6", "7", "8"],
-          correct: 1,
-          explanation: "10 - 4 = 6"
-        }
-      ],
-      'science': [
-        {
-          question: "What is the chemical symbol for water?",
-          options: ["H2O", "CO2", "NaCl", "O2"],
-          correct: 0,
-          explanation: "Water is H2O - two hydrogen atoms and one oxygen atom"
-        },
-        {
-          question: "What planet is closest to the Sun?",
-          options: ["Venus", "Earth", "Mercury", "Mars"],
-          correct: 2,
-          explanation: "Mercury is the closest planet to the Sun"
-        }
-      ],
-      'social-science': [
-        {
-          question: "Who was the first President of India?",
-          options: ["Jawaharlal Nehru", "Rajendra Prasad", "Sardar Patel", "Mahatma Gandhi"],
-          correct: 1,
-          explanation: "Dr. Rajendra Prasad was the first President of India"
-        }
-      ],
-      'english': [
-        {
-          question: "What is the plural of 'child'?",
-          options: ["childs", "children", "childes", "child"],
-          correct: 1,
-          explanation: "The plural of 'child' is 'children'"
-        }
-      ]
-    };
+  // Generate contextual quiz question based on user's original question
+  const generateQuizQuestion = useCallback(async (subject, recentMessages, userQuestion) => {
+    try {
+      console.log('[ChatShell] Generating contextual quiz for:', { subject, userQuestion });
+      
+      // Find the user's original question from recent messages
+      const originalQuestion = userQuestion || 
+        recentMessages.find(msg => msg.type === 'user')?.content || 
+        'general topic';
+      
+      // Call the AI to generate a contextual quiz question
+      const response = await fetch('/api/generate-quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: subject,
+          originalQuestion: originalQuestion,
+          context: recentMessages.slice(-3).map(m => `${m.type}: ${m.content}`).join('\n')
+        })
+      });
 
-    const subjectQuestions = quizQuestions[subject] || quizQuestions['mathematics'];
-    const randomIndex = Math.floor(Math.random() * subjectQuestions.length);
-    return subjectQuestions[randomIndex];
+      if (response.ok) {
+        const quizData = await response.json();
+        console.log('[ChatShell] Generated contextual quiz:', quizData);
+        return quizData;
+      } else {
+        throw new Error('Failed to generate quiz');
+      }
+    } catch (error) {
+      console.error('[ChatShell] Error generating contextual quiz:', error);
+      
+      // Fallback to simple contextual question
+      return {
+        question: `Based on your question about "${userQuestion || 'this topic'}", which of the following is most relevant?`,
+        options: [
+          "The main concept we discussed",
+          "A related application", 
+          "A common misconception",
+          "A practical example"
+        ],
+        correct: 0,
+        explanation: "This relates to the core concept we just covered in your question."
+      };
+    }
   }, []);
 
   // Handle message sending with proper session management and error handling
@@ -806,7 +796,7 @@ export default function ChatShell({ subject, onBack }) {
   }, [handleSendMessage, isAuthenticated, fastTrackMode]);
 
   // Handle "Got it" clicks for quiz and progressive profile collection
-  const handleGotItClick = useCallback(() => {
+  const handleGotItClick = useCallback(async () => {
     console.log('[ChatShell] handleGotItClick called:', { gotItCount, isAuthenticated });
     const newGotItCount = gotItCount + 1;
     setGotItCount(newGotItCount);
@@ -816,8 +806,11 @@ export default function ChatShell({ subject, onBack }) {
     
     // Only show quiz if not already completed for current question (for guest users)
     if (!isAuthenticated && !quizCompletedForCurrentQuestion) {
-      // Generate quiz question
-      const quiz = generateQuizQuestion(subject, messages);
+      // Find the user's original question from recent messages
+      const userQuestion = messages.find(msg => msg.type === 'user')?.content;
+      
+      // Generate contextual quiz question
+      const quiz = await generateQuizQuestion(subject, messages, userQuestion);
       setCurrentQuiz(quiz);
       setQuizStep('question');
       setWaitingForQuizResponse(true);
@@ -825,7 +818,7 @@ export default function ChatShell({ subject, onBack }) {
       // Create quiz message with options
       const quizMessage = {
         id: `quiz-${Date.now()}`,
-        content: `Great! Let me test your understanding with a quick question:\n\n**${quiz.question}**`,
+        content: `**❓ Quick Check**\n\nGreat! Let me test your understanding with a quick question:\n\n**${quiz.question}**`,
         type: 'ai',
         messageType: 'quiz',
         timestamp: new Date(),

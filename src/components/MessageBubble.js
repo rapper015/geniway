@@ -77,7 +77,28 @@ export default function MessageBubble({ message, onRetry, onMCQOptionClick }) {
                     onClick={() => onMCQOptionClick && onMCQOptionClick((index + 1).toString(), message.content)}
                     className="w-full text-left p-3 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
                   >
-                    <span className="font-medium text-blue-900">{index + 1})</span> {option}
+                    <span className="font-medium text-blue-900">{index + 1})</span>
+                    <span className="ml-2">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkMath]}
+                        rehypePlugins={[rehypeKatex]}
+                        components={{
+                          p: ({ children }) => <span>{children}</span>,
+                          div: ({ children, className }) => {
+                            if (className?.includes('katex')) {
+                              return (
+                                <span className="inline-block my-1">
+                                  {children}
+                                </span>
+                              );
+                            }
+                            return <span>{children}</span>;
+                          }
+                        }}
+                      >
+                        {formatContent(option)}
+                      </ReactMarkdown>
+                    </span>
                   </button>
                 ))}
               </div>
@@ -189,7 +210,28 @@ export default function MessageBubble({ message, onRetry, onMCQOptionClick }) {
                 onClick={() => onMCQOptionClick && onMCQOptionClick(option.letter, message.content)}
                 className="w-full text-left p-3 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
               >
-                <span className="font-medium text-blue-900">{option.letter})</span> {option.text}
+                <span className="font-medium text-blue-900">{option.letter})</span>
+                <span className="ml-2">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkMath]}
+                    rehypePlugins={[rehypeKatex]}
+                    components={{
+                      p: ({ children }) => <span>{children}</span>,
+                      div: ({ children, className }) => {
+                        if (className?.includes('katex')) {
+                          return (
+                            <span className="inline-block my-1">
+                              {children}
+                            </span>
+                          );
+                        }
+                        return <span>{children}</span>;
+                      }
+                    }}
+                  >
+                    {formatContent(option.text)}
+                  </ReactMarkdown>
+                </span>
               </button>
             ))}
           </div>

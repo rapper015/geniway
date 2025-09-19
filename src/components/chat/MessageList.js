@@ -68,7 +68,25 @@ const MessageList = forwardRef(({
           const isLatestMessage = index === messages.length - 1;
           const isLatestBotMessage = isLatestMessage && message.type === 'ai';
           
-          console.log('[MessageList] Rendering message:', { index, message: { id: message.id, type: message.type, content: message.content?.substring(0, 50) } });
+          // Check if this AI message is a response to a user question
+          const previousMessage = index > 0 ? messages[index - 1] : null;
+          const messageIdString = String(message.id || '');
+          const isResponseToUserQuestion = previousMessage && 
+            previousMessage.type === 'user' && 
+            message.type === 'ai' &&
+            !messageIdString.includes('welcome') && // Not a welcome message
+            !messageIdString.includes('profile') && // Not a profile collection message
+            !messageIdString.includes('quiz') && // Not a quiz message
+            !messageIdString.includes('ack') && // Not an acknowledgment message
+            !messageIdString.includes('thank') && // Not a thank you message
+            !messageIdString.includes('error'); // Not an error message
+          
+          console.log('[MessageList] Rendering message:', { 
+            index, 
+            message: { id: message.id, type: message.type, content: message.content?.substring(0, 50) },
+            isResponseToUserQuestion,
+            previousMessage: previousMessage ? { type: previousMessage.type, id: previousMessage.id } : null
+          });
           
           return (
             <div key={message.id} className="space-y-2">
@@ -77,8 +95,8 @@ const MessageList = forwardRef(({
                 onRetry={onRetry}
                 onMCQOptionClick={onMCQOptionClick}
               />
-              {/* Quick actions only for the latest bot message, when not streaming, and when not hidden */}
-              {isLatestBotMessage && onQuickReplyClick && !hideQuickActions && !isStreaming && (
+              {/* Quick actions only for AI responses to user questions */}
+              {isLatestBotMessage && isResponseToUserQuestion && onQuickReplyClick && !hideQuickActions && !isStreaming && (
                 <div className="ml-12">
                   <QuickRepliesBar
                     replies={DEFAULT_QUICK_REPLIES}

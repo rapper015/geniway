@@ -11,17 +11,35 @@ export class SimpleOrchestrator {
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY
     });
+    
+    // Geni Ma'am system prompt
+    this.systemPrompt = "You are Geni Ma'am, a warm and knowledgeable Indian tutor specializing in CBSE curriculum for students grades 6-12. Provide clear, educational explanations with appropriate scaffolding.";
+    
+    // Section types in US-3.5 scaffolding framework
+    this.sectionTypes = {
+      PROBE: 'probe',
+      BIG_IDEA: 'big_idea', 
+      EXAMPLE: 'example',
+      QUICK_CHECK: 'quick_check',
+      TRY_IT: 'try_it',
+      RECAP: 'recap',
+      MCQ_VALIDATION: 'mcq_validation'
+    };
   }
 
   async processStudentInput(sessionId, studentInput, onEvent) {
     try {
+      console.log('[SimpleOrchestrator] Processing student input:', { sessionId, studentInput });
+      
       // Get or create session
       let session = await this.getSession(sessionId);
       if (!session) {
+        console.log('[SimpleOrchestrator] Creating new session');
         session = await this.createSession(studentInput.userId, studentInput.subject);
       }
 
       // Add user message
+      console.log('[SimpleOrchestrator] Adding user message');
       await this.addMessage({
         sessionId: session._id.toString(),
         userId: studentInput.userId,
@@ -31,8 +49,32 @@ export class SimpleOrchestrator {
         imageUrl: studentInput.imageUrl
       });
 
-      // Generate AI response
-      const aiResponse = await this.generateResponse(studentInput, session);
+      // Get conversation context
+      console.log('[SimpleOrchestrator] Building tutoring context');
+      const context = await this.buildTutoringContext(session, studentInput);
+      
+      // Determine which section to generate based on intent
+      console.log('[SimpleOrchestrator] Determining section type');
+      const sectionType = this.determineSectionByIntent(context);
+      console.log('[SimpleOrchestrator] Section type determined:', sectionType);
+      
+      // Generate appropriate section
+      console.log('[SimpleOrchestrator] Generating section content');
+      let sectionContent;
+      try {
+        sectionContent = await this.generateSection(sectionType, context);
+      } catch (sectionError) {
+        console.error('[SimpleOrchestrator] Section generation failed, using fallback:', sectionError);
+        // Fallback to simple response
+        sectionContent = {
+          content: `I understand you're asking about: "${studentInput.text}". Let me help you with that.`,
+          metadata: {
+            sectionType: 'fallback',
+            tokensUsed: 0,
+            model: 'fallback'
+          }
+        };
+      }
       
       // Add AI message
       const aiMessage = await this.addMessage({
@@ -40,19 +82,20 @@ export class SimpleOrchestrator {
         userId: studentInput.userId,
         sender: 'ai',
         messageType: 'text',
-        content: aiResponse.content
+        content: sectionContent.content
       });
 
-      // Send events
+      // Send structured events
       if (onEvent) {
         onEvent({
           type: 'section',
           data: {
             section: {
               id: `section-${Date.now()}`,
-              type: 'response',
-              title: '',
-              content: aiResponse.content,
+              type: sectionType,
+              title: this.getSectionTitle(sectionType),
+              content: sectionContent.content,
+              metadata: sectionContent.metadata,
               isCompleted: true
             },
             isComplete: true
@@ -66,15 +109,16 @@ export class SimpleOrchestrator {
           data: {
             section: {
               id: `section-${Date.now()}`,
-              type: 'response',
-              title: '',
-              content: aiResponse.content,
+              type: sectionType,
+              title: this.getSectionTitle(sectionType),
+              content: sectionContent.content,
+              metadata: sectionContent.metadata,
               isCompleted: true
             },
             performance: {
               ttft: 500,
               totalTime: 2000,
-              tokensGenerated: aiResponse.tokensUsed || 0
+              tokensGenerated: sectionContent.metadata?.tokensUsed || 0
             }
           },
           timestamp: new Date(),
@@ -85,18 +129,33 @@ export class SimpleOrchestrator {
       return {
         success: true,
         message: aiMessage,
-        response: aiResponse
+        response: sectionContent,
+        sectionType: sectionType
       };
     } catch (error) {
-      console.error('Error processing student input:', error);
+      console.error('[SimpleOrchestrator] Error processing student input:', error);
+      console.error('[SimpleOrchestrator] Error stack:', error.stack);
+      console.error('[SimpleOrchestrator] Error details:', {
+        message: error.message,
+        code: error.code,
+        type: error.type,
+        status: error.status,
+        name: error.name
+      });
       
       if (onEvent) {
         onEvent({
           type: 'error',
           data: {
-            error: error.message,
+            error: error.message || 'Unknown error occurred',
             code: 'PROCESSING_ERROR',
-            retryable: true
+            retryable: true,
+            details: {
+              name: error.name,
+              code: error.code,
+              type: error.type,
+              status: error.status
+            }
           },
           timestamp: new Date(),
           sessionId
@@ -183,6 +242,7 @@ export class SimpleOrchestrator {
     }
   }
 
+  // OLD METHOD - DEPRECATED: Using new scaffolding framework instead
   async generateResponse(studentInput, session) {
     try {
       // Get recent conversation history
@@ -315,5 +375,364 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
     } catch (error) {
       console.error('Error updating message stats:', error);
     }
+  }
+
+  // Build tutoring context from session and student input
+  async buildTutoringContext(session, studentInput) {
+    try {
+      console.log('[SimpleOrchestrator] Building tutoring context for session:', session._id);
+      const messages = await ChatMessage.find({ sessionId: session._id })
+        .sort({ timestamp: 1 })
+        .limit(10); // Last 10 messages for context
+
+      console.log('[SimpleOrchestrator] Found messages:', messages.length);
+
+      return {
+        sessionId: session._id.toString(),
+        userId: studentInput.userId,
+        subject: session.subject || 'general',
+        currentInput: studentInput.text,
+        messageHistory: messages,
+        curriculumContext: {
+          subject: session.subject || 'general',
+          class: '10', // Default to class 10
+          board: 'CBSE',
+          language: 'en'
+        }
+      };
+    } catch (error) {
+      console.error('[SimpleOrchestrator] Error building tutoring context:', error);
+      throw error;
+    }
+  }
+
+  // Determine which section to generate based on user intent
+  determineSectionByIntent(context) {
+    const latestInput = context.currentInput.toLowerCase();
+    const messageHistory = context.messageHistory;
+    
+    console.log('[SimpleOrchestrator] Determining section for input:', latestInput);
+    
+    // Check if this is an MCQ response
+    if (this.isMCQResponse(latestInput)) {
+      console.log('[SimpleOrchestrator] Detected MCQ response');
+      return this.sectionTypes.MCQ_VALIDATION;
+    }
+    
+    // Check if user confirmed understanding
+    if (this.userConfirmedUnderstanding(latestInput)) {
+      console.log('[SimpleOrchestrator] Detected understanding confirmation');
+      return this.sectionTypes.RECAP;
+    }
+    
+    // Check if this is an initial question (no previous AI messages)
+    const hasAIMessages = messageHistory.some(msg => msg.sender === 'ai');
+    if (!hasAIMessages) {
+      console.log('[SimpleOrchestrator] Detected initial question');
+      return this.sectionTypes.BIG_IDEA;
+    }
+    
+    // Check for specific requests
+    if (this.isExampleRequest(latestInput)) {
+      console.log('[SimpleOrchestrator] Detected example request');
+      return this.sectionTypes.EXAMPLE;
+    }
+    
+    if (this.isStepsRequest(latestInput)) {
+      console.log('[SimpleOrchestrator] Detected steps request');
+      return this.sectionTypes.EXAMPLE;
+    }
+    
+    if (this.isHintRequest(latestInput)) {
+      console.log('[SimpleOrchestrator] Detected hint request');
+      return this.sectionTypes.TRY_IT;
+    }
+    
+    // Default to Big Idea for new concepts
+    console.log('[SimpleOrchestrator] Defaulting to Big Idea');
+    return this.sectionTypes.BIG_IDEA;
+  }
+
+  // Helper methods for intent detection
+  isMCQResponse(input) {
+    return /^(i selected|i chose|option [a-d]|answer [a-d]|it's [a-d])/i.test(input);
+  }
+
+  userConfirmedUnderstanding(input) {
+    return /^(got it|understood|clear|thanks|thank you|i get it|i understand)/i.test(input);
+  }
+
+  isExampleRequest(input) {
+    return /^(example|show me|demonstrate|can you give|give me an example)/i.test(input);
+  }
+
+  isStepsRequest(input) {
+    const result = /^(steps|step by step|detailed steps|show steps|show detailed steps|how to|process|procedure|break it down|explain step by step|walk me through)/i.test(input);
+    console.log('[SimpleOrchestrator] isStepsRequest check:', { input, result });
+    return result;
+  }
+
+  isHintRequest(input) {
+    const result = /^(hint|help|not clear|confused|don't understand)/i.test(input);
+    console.log('[SimpleOrchestrator] isHintRequest check:', { input, result });
+    return result;
+  }
+
+  // Generate section content based on type
+  async generateSection(sectionType, context) {
+    try {
+      console.log('[SimpleOrchestrator] Building prompt for section:', sectionType);
+      const prompt = this.buildSectionPrompt(sectionType, context);
+      console.log('[SimpleOrchestrator] Prompt built, length:', prompt.length);
+      
+      // Check if OpenAI API key is available
+      if (!process.env.OPENAI_API_KEY) {
+        throw new Error('OpenAI API key is not configured');
+      }
+      
+      console.log('[SimpleOrchestrator] Calling OpenAI API');
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: this.systemPrompt },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.3,
+        max_tokens: this.getMaxTokensForSection(sectionType)
+      });
+
+      console.log('[SimpleOrchestrator] OpenAI response received');
+      const content = response.choices[0].message.content;
+      
+      return {
+        content: content,
+        metadata: {
+          sectionType: sectionType,
+          tokensUsed: response.usage?.total_tokens || 0,
+          model: 'gpt-4o'
+        }
+      };
+    } catch (error) {
+      console.error(`[SimpleOrchestrator] Error generating ${sectionType} section:`, error);
+      console.error('[SimpleOrchestrator] Error details:', {
+        message: error.message,
+        code: error.code,
+        type: error.type,
+        status: error.status
+      });
+      throw error;
+    }
+  }
+
+  // Build section-specific prompts
+  buildSectionPrompt(sectionType, context) {
+    const { currentInput, curriculumContext, messageHistory } = context;
+    
+    switch (sectionType) {
+      case this.sectionTypes.BIG_IDEA:
+        return this.buildBigIdeaPrompt(currentInput, curriculumContext, messageHistory);
+      
+      case this.sectionTypes.EXAMPLE:
+        return this.buildExamplePrompt(currentInput, curriculumContext, messageHistory);
+      
+      case this.sectionTypes.QUICK_CHECK:
+        return this.buildQuickCheckPrompt(currentInput, curriculumContext);
+      
+      case this.sectionTypes.TRY_IT:
+        return this.buildTryItPrompt(currentInput, curriculumContext);
+      
+      case this.sectionTypes.RECAP:
+        return this.buildRecapPrompt(currentInput, curriculumContext, messageHistory);
+      
+      case this.sectionTypes.MCQ_VALIDATION:
+        return this.buildMCQValidationPrompt(currentInput, curriculumContext, messageHistory);
+      
+      default:
+        return this.buildBigIdeaPrompt(currentInput, curriculumContext, messageHistory);
+    }
+  }
+
+  // Section-specific prompt builders
+  buildBigIdeaPrompt(input, curriculumContext, messageHistory) {
+    const conversationContext = messageHistory.length > 0 
+      ? `Previous conversation: ${messageHistory.slice(-3).map(m => `${m.sender}: ${m.content}`).join('\n')}`
+      : '';
+
+    return `You are Geni Ma'am, a warm Indian tutor. Generate a Big Idea section per US-3.5 scaffolding framework.
+
+${conversationContext}
+
+**US-3.5 BIG IDEA REQUIREMENTS:**
+- STRICT WORD LIMIT: Maximum 120 words  
+- PEDAGOGICAL STRUCTURE: Core concept explanation with grade-appropriate language
+- REAL-WORLD CONNECTION: Link to student's prior knowledge or everyday examples relevant to Indian context
+- ACADEMIC TONE: Appropriate for Class ${curriculumContext.class} (${curriculumContext.board} board)
+
+**CONTENT GUIDELINES:**
+Subject: ${curriculumContext.subject} | Language: ${curriculumContext.language === 'hi' ? 'Hindi' : curriculumContext.language === 'hinglish' ? 'Hinglish' : 'English'}
+Topic: ${curriculumContext.subject} | Original: "${input}"
+
+**OUTPUT FORMAT:**
+Provide clear, concise explanation of the core concept in exactly 120 words or fewer. Focus on:
+1. Main concept definition  
+2. Why it matters
+3. One concrete real-world relevant example
+4. Connection to student's question`;
+  }
+
+  buildExamplePrompt(input, curriculumContext, messageHistory) {
+    const conversationContext = messageHistory.length > 0 
+      ? `Previous conversation: ${messageHistory.slice(-3).map(m => `${m.sender}: ${m.content}`).join('\n')}`
+      : '';
+
+    // Check if user specifically asked for detailed steps
+    const isDetailedStepsRequest = /detailed steps|show detailed steps|break it down|explain step by step|walk me through/i.test(input);
+
+    return `You are Geni Ma'am. Here's the complete conversation context:
+
+${conversationContext}
+
+EXAMPLE SECTION (3-5 numbered steps): Provide a ${isDetailedStepsRequest ? 'detailed, comprehensive' : 'clear'} step-by-step example based on the complete conversation history.
+
+Context Details:
+Subject: ${curriculumContext.subject} (Class ${curriculumContext.class}) 
+Topic: ${curriculumContext.subject}
+Board: ${curriculumContext.board}
+Language: ${curriculumContext.language === 'hi' ? 'Hindi' : curriculumContext.language === 'hinglish' ? 'Hinglish' : 'English'}
+
+IMPORTANT: 
+- Always reference the ORIGINAL question topic ("${input}")
+- If asking for "detailed steps", provide comprehensive, thorough steps with explanations
+- If asking for "simpler example", simplify the SAME topic, don't switch topics
+- Build on the previous explanation context provided
+- Each step should be clear, actionable, and educational
+
+Format as:
+Step 1: [Specific action] - [Clear reason and explanation]
+Step 2: [Specific action] - [Clear reason and explanation]
+Step 3: [Specific action] - [Clear reason and explanation]
+${isDetailedStepsRequest ? 'Step 4: [Additional detail] - [Further explanation]\nStep 5: [Final step] - [Summary and verification]' : ''}
+
+Focus specifically on the original topic: "${input}"`;
+  }
+
+  buildQuickCheckPrompt(input, curriculumContext) {
+    return `You are Geni Ma'am, a warm Indian tutor. Generate a Quick Check MCQ per US-3.5 scaffolding framework.
+
+ORIGINAL STUDENT QUESTION: "${input}"
+Subject: ${curriculumContext.subject} | Class: ${curriculumContext.class}
+
+**US-3.5 QUICK CHECK REQUIREMENTS:**
+- FORMAT: One clear MCQ question with exactly 4 options (A, B, C, D)
+- PURPOSE: Test understanding of the core concept from "${input}"
+- TOPIC FOCUS: Must be directly related to "${input}"
+
+**OUTPUT FORMAT:**
+Question: [Brief question about the concept]
+
+A) [First option]
+B) [Second option] 
+C) [Third option]
+D) [Fourth option]
+
+Correct Answer: [A/B/C/D]
+Explanation: [Brief explanation of why the correct answer is right]`;
+  }
+
+  buildTryItPrompt(input, curriculumContext) {
+    return `You are Geni Ma'am, a warm Indian tutor. Generate a Try It section per US-3.5 scaffolding framework.
+
+ORIGINAL STUDENT QUESTION: "${input}"
+Subject: ${curriculumContext.subject} | Class: ${curriculumContext.class}
+
+**US-3.5 TRY IT REQUIREMENTS:**
+- PEDAGOGICAL PURPOSE: Give student chance to practice the concept independently
+- GUIDANCE LEVEL: Provide encouragement but let them think for themselves
+- FORMAT: Clear practice prompt with supportive tone
+- TOPIC FOCUS: Must be directly related to "${input}" - not a different topic
+
+**OUTPUT FORMAT:**
+Provide encouraging practice prompt about "${input}" that motivates the student to try applying this specific concept.
+Keep it concise and supportive.
+
+Focus on building confidence and independent application of "${input}".`;
+  }
+
+  buildRecapPrompt(input, curriculumContext, messageHistory) {
+    const conversationContext = messageHistory.length > 0 
+      ? `Previous conversation: ${messageHistory.slice(-3).map(m => `${m.sender}: ${m.content}`).join('\n')}`
+      : '';
+
+    return `You are Geni Ma'am, a warm Indian tutor. Generate a Recap section per US-3.5 scaffolding framework.
+
+Context: Student asked: "${input}"
+Subject: ${curriculumContext.subject} | Class: ${curriculumContext.class}
+
+${conversationContext}
+
+**US-3.5 RECAP REQUIREMENTS:**
+- STRICT FORMAT: Exactly 2 lines maximum
+- PURPOSE: Summarize key learning points from this session
+- TONE: Encouraging and consolidating
+
+**OUTPUT FORMAT:**
+Provide exactly 2 lines that recap the main learning points.
+Line 1: Core concept summary
+Line 2: Practical application or significance
+
+Keep it concise and encouraging.`;
+  }
+
+  buildMCQValidationPrompt(input, curriculumContext, messageHistory) {
+    const lastAIMessage = messageHistory.filter(m => m.sender === 'ai').pop();
+    const quickCheckContent = lastAIMessage ? lastAIMessage.content : '';
+
+    return `You are Geni Ma'am validating a student's MCQ answer.
+
+CONTEXT:
+Student originally asked: "${input}"
+
+QUICK CHECK QUESTION YOU ASKED:
+${quickCheckContent}
+
+STUDENT'S RESPONSE:
+"${input}"
+
+YOUR TASK:
+Analyze the student's response against the quick check question and provide appropriate feedback:
+
+1. If CORRECT: Provide encouraging feedback with brief explanation (≤50 words)
+2. If INCORRECT: Show "⚠️ Common Mistake" warning, explain why their choice is wrong, and guide them to the correct understanding
+3. If unclear: Provide constructive educational guidance about the concept
+
+You have the complete question context above - determine the correct answer based on the question content and validate accordingly.
+
+Be warm, supportive, and educational. Keep response concise but informative.`;
+  }
+
+  // Get section title with emojis
+  getSectionTitle(sectionType) {
+    const titles = {
+      [this.sectionTypes.BIG_IDEA]: '🧠 Big Idea',
+      [this.sectionTypes.EXAMPLE]: '📚 Step-by-Step Example',
+      [this.sectionTypes.QUICK_CHECK]: '❓ Quick Check',
+      [this.sectionTypes.TRY_IT]: '🎯 Try It Yourself',
+      [this.sectionTypes.RECAP]: '📌 Recap',
+      [this.sectionTypes.MCQ_VALIDATION]: '✅ Answer Review'
+    };
+    return titles[sectionType] || '💬 Response';
+  }
+
+  // Get max tokens for each section type
+  getMaxTokensForSection(sectionType) {
+    const tokenLimits = {
+      [this.sectionTypes.BIG_IDEA]: 200,
+      [this.sectionTypes.EXAMPLE]: 400,
+      [this.sectionTypes.QUICK_CHECK]: 300,
+      [this.sectionTypes.TRY_IT]: 200,
+      [this.sectionTypes.RECAP]: 100,
+      [this.sectionTypes.MCQ_VALIDATION]: 150
+    };
+    return tokenLimits[sectionType] || 300;
   }
 }

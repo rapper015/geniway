@@ -79,15 +79,26 @@ export async function GET(request) {
           controller.enqueue(encoder.encode(completionEvent));
 
         } catch (error) {
-          console.error('Error processing input:', error);
+          console.error('[Solve API] Error processing input:', error);
+          console.error('[Solve API] Error details:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name,
+            code: error.code
+          });
           
-          // Send error event
+          // Send error event with more details
           const errorEvent = `data: ${JSON.stringify({
             type: 'error',
             data: {
-              error: error.message,
+              error: error.message || 'Unknown error occurred',
               code: 'PROCESSING_ERROR',
-              retryable: true
+              retryable: true,
+              details: {
+                name: error.name,
+                code: error.code,
+                stack: error.stack
+              }
             },
             timestamp: new Date().toISOString(),
             sessionId

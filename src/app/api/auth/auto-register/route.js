@@ -20,20 +20,32 @@ export async function POST(request) {
     const tempEmail = `guest_${Date.now()}@geniway.local`;
     const fullName = `${firstName} ${lastName}`;
 
-    // Create new user
+    // Create new user with comprehensive profile
     const user = new User({
       name: fullName,
+      firstName: firstName,
+      lastName: lastName,
       email: tempEmail,
       role: role,
       grade: grade || null,
       isGuest: isGuest,
+      board: 'CBSE',
+      langPref: 'en',
+      teachingLanguage: 'English',
+      pace: 'Normal',
+      learningStyle: 'Text',
+      learningStyles: ['Text'],
+      contentMode: 'step-by-step',
+      fastTrackEnabled: false,
+      saveChatHistory: true,
+      studyStreaksEnabled: true,
+      breakRemindersEnabled: true,
+      masteryNudgesEnabled: true,
+      dataSharingEnabled: false,
+      ageBand: grade && grade <= 8 ? '6-10' : grade && grade <= 10 ? '11-14' : '15-18',
       preferences: {
         language: 'en',
-        notifications: true,
-        subjects: [],
-        learningStyle: 'visual',
-        pace: 'normal',
-        saveChatHistory: true
+        notifications: true
       }
     });
 
