@@ -15,10 +15,14 @@ import FinalCTA from "../components/FinalCTA";
 import StickyBottomBar from "../components/StickyBottomBar";
 import SampleBottomSheet from "../components/SampleBottomSheet";
 import RoutingSkeleton from "../components/RoutingSkeleton";
+import AuthModal from "../components/auth/AuthModal";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function Home() {
   const [guestUuid, setGuestUuid] = useState(null);
   const [isGuestSessionInitialized, setIsGuestSessionInitialized] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const { login } = useAuth();
 
   // Initialize guest session on first visit
   useEffect(() => {
@@ -74,9 +78,18 @@ export default function Home() {
     }
   }, [isGuestSessionInitialized, guestUuid]);
 
+  const handleLoginClick = () => {
+    setIsAuthModalOpen(true);
+  };
+
+  const handleAuthSuccess = (user) => {
+    console.log('Login successful:', user);
+    // The AuthContext will handle the login state
+  };
+
   return (
     <div className="bg-background text-foreground">
-      <Header />
+      <Header onLoginClick={handleLoginClick} />
       <Hero />
       <InlineInputBar />
       <TrustChips />
@@ -91,6 +104,13 @@ export default function Home() {
       <div className="h-20" /> {/* Bottom padding for sticky bar */}
       <SampleBottomSheet />
       <RoutingSkeleton />
+      
+      {/* Auth Modal */}
+      <AuthModal 
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onAuthSuccess={handleAuthSuccess}
+      />
     </div>
   );
 }

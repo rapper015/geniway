@@ -1,9 +1,11 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useAuth } from '../contexts/AuthContext';
 
-export default function Header() {
+export default function Header({ onLoginClick }) {
   const router = useRouter();
+  const { isAuthenticated, user } = useAuth();
 
   const handleStartClick = () => {
     router.push('/chat');
@@ -29,6 +31,23 @@ export default function Header() {
           >
             EN / हिंदी
           </button>
+          
+          {/* Login Button - only show if not authenticated */}
+          {!isAuthenticated && (
+            <button 
+              className="px-3 py-1.5 text-sm text-blue-600 hover:text-blue-700 transition-colors" 
+              onClick={onLoginClick}
+            >
+              Login
+            </button>
+          )}
+          
+          {/* User Profile - only show if authenticated */}
+          {isAuthenticated && user && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Hi, {user.name}</span>
+            </div>
+          )}
           
           {/* Start Button */}
           <button 
