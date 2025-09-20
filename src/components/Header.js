@@ -25,12 +25,12 @@ export default function Header({ onLoginClick }) {
         {/* Right Controls */}
         <div className="flex items-center gap-2">
           {/* Language Toggle */}
-          <button 
+          {/* <button 
             className="px-3 py-1.5 text-sm border border-gray-300 rounded-full text-gray-600 hover:bg-gray-50 transition-colors" 
             data-testid="lang-toggle"
           >
             EN / हिंदी
-          </button>
+          </button> */}
           
           {/* Login Button - only show if not authenticated */}
           {!isAuthenticated && (

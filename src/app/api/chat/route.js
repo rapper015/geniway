@@ -26,7 +26,7 @@ export async function POST(request) {
       );
     }
 
-    const { message, messageType, imageUrl, sessionId, userId, subject, userName } = await request.json();
+    const { message, messageType, imageUrl, sessionId, userId, subject, userName, language } = await request.json();
 
     // Validate required fields
     if (!message && !imageUrl) {
@@ -59,10 +59,25 @@ export async function POST(request) {
     // Get or create session
     let session = await ChatSessionNew.findById(sessionId);
     if (!session) {
-      return NextResponse.json(
-        { error: 'Session not found' },
-        { status: 404 }
-      );
+      console.log('[Chat API] Session not found, creating new session:', sessionId);
+      // Create a new session if it doesn't exist
+      session = await ChatSessionNew.create({
+        id: sessionId, // Use the provided sessionId
+        userId: userId,
+        subject: subject || 'general',
+        mode: 'step-by-step',
+        title: 'New Chat',
+        messageCount: 0,
+        lastActive: new Date().toISOString(),
+        isGuest: userId ? userId.startsWith('guest_') : false,
+        status: 'active',
+        messages: [],
+        metadata: {
+          createdAt: new Date().toISOString(),
+          lastActivity: new Date().toISOString()
+        }
+      });
+      console.log('[Chat API] Created new session:', session.id);
     }
 
     // Create user message
@@ -93,10 +108,10 @@ export async function POST(request) {
     try {
       if (imageUrl) {
         // Handle image + text message
-        aiResponse = await openaiService.generateImageResponse(message, imageUrl, subject);
+        aiResponse = await openaiService.generateImageResponse(message, imageUrl, subject, language);
       } else {
         // Handle text-only message
-        aiResponse = await openaiService.generateResponse(message, subject);
+        aiResponse = await openaiService.generateResponse(message, subject, language);
       }
     } catch (error) {
       console.error('OpenAI API error:', error);

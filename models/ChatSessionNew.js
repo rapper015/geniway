@@ -34,8 +34,8 @@ export class ChatSessionNew {
 
   // Static methods for database operations
   static async create(sessionData) {
-    const session = new ChatSessionNew(sessionData);
     const id = replitDB.generateId();
+    const session = new ChatSessionNew({ ...sessionData, id });
     const savedSession = await replitDB.create('session_new', id, session);
     return new ChatSessionNew(savedSession);
   }

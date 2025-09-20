@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { connectDB } from '../../../../../../lib/mongodb';
 import { User } from '../../../../../../models/User';
 import ChatSession from '../../../../../../models/ChatSession';
 import { ChatMessage } from '../../../../../../models/ChatMessage';
@@ -7,7 +6,7 @@ import { ChatMessage } from '../../../../../../models/ChatMessage';
 // POST - Export user data
 export async function POST(request, { params }) {
   try {
-    const { userId } = params;
+    const { userId } = await params;
     const { format } = await request.json();
 
     if (!userId) {
@@ -18,12 +17,10 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'Format must be pdf or email' }, { status: 400 });
     }
 
-    await connectDB();
-
     // Find user
     let user = await User.findById(userId);
     if (!user) {
-      user = await User.findOne({ email: userId });
+      user = await User.findByEmail(userId);
     }
 
     if (!user) {
@@ -31,9 +28,18 @@ export async function POST(request, { params }) {
     }
 
     // Get user's chat sessions and messages
-    const sessions = await ChatSession.find({ userId: userId.toString() }).sort({ createdAt: -1 });
-    const sessionIds = sessions.map(session => session._id);
-    const messages = await ChatMessage.find({ sessionId: { $in: sessionIds } }).sort({ timestamp: 1 });
+    const sessions = await ChatSession.find({ userId: userId });
+    const sessionIds = sessions.map(session => session.id);
+    
+    // Get messages for all sessions
+    let allMessages = [];
+    for (const sessionId of sessionIds) {
+      const sessionMessages = await ChatMessage.findBySessionId(sessionId);
+      allMessages = allMessages.concat(sessionMessages);
+    }
+    
+    // Sort messages by timestamp
+    allMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
     // Prepare export data
     const exportData = {
@@ -47,23 +53,23 @@ export async function POST(request, { params }) {
         createdAt: user.createdAt
       },
       sessions: sessions.map(session => ({
-        id: session._id,
+        id: session.id,
         subject: session.subject,
         title: session.title,
         messageCount: session.messageCount,
         createdAt: session.createdAt,
         lastActive: session.lastActive
       })),
-      messages: messages.map(message => ({
+      messages: allMessages.map(message => ({
         sessionId: message.sessionId,
         sender: message.sender,
         content: message.content,
         messageType: message.messageType,
-        timestamp: message.timestamp
+        timestamp: message.createdAt
       })),
       exportDate: new Date().toISOString(),
       totalSessions: sessions.length,
-      totalMessages: messages.length
+      totalMessages: allMessages.length
     };
 
     if (format === 'pdf') {

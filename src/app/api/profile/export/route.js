@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { connectDB } from '../../../../../lib/mongodb';
 import { User } from '../../../../../models/User';
 import ChatSession from '../../../../../models/ChatSession';
 import { ChatMessage } from '../../../../../models/ChatMessage';
@@ -16,8 +15,6 @@ export async function POST(request) {
       );
     }
 
-    await connectDB();
-
     // Get user data
     const user = await User.findById(userId);
     if (!user) {
@@ -28,14 +25,21 @@ export async function POST(request) {
     }
 
     // Get user's chat sessions and messages
-    const sessions = await ChatSession.find({ userId }).sort({ createdAt: -1 });
-    const sessionIds = sessions.map(session => session._id);
-    const messages = await ChatMessage.find({ 
-      sessionId: { $in: sessionIds } 
-    }).sort({ createdAt: 1 });
+    const sessions = await ChatSession.find({ userId });
+    const sessionIds = sessions.map(session => session.id);
+    
+    // Get messages for all sessions
+    let allMessages = [];
+    for (const sessionId of sessionIds) {
+      const sessionMessages = await ChatMessage.findBySessionId(sessionId);
+      allMessages = allMessages.concat(sessionMessages);
+    }
+    
+    // Sort messages by timestamp
+    allMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
     // Get user stats
-    const stats = await UserStats.findOne({ userId });
+    const stats = await UserStats.findByUserId(userId);
 
     const exportData = {
       user: {
@@ -48,15 +52,15 @@ export async function POST(request) {
       },
       stats: stats || {},
       sessions: sessions.map(session => ({
-        id: session._id,
+        id: session.id,
         subject: session.subject,
         title: session.title,
         messageCount: session.messageCount,
         createdAt: session.createdAt,
         lastActive: session.lastActive
       })),
-      messages: messages.map(message => ({
-        id: message._id,
+      messages: allMessages.map(message => ({
+        id: message.id,
         sessionId: message.sessionId,
         sender: message.sender,
         type: message.messageType,

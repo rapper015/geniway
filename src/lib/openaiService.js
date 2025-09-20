@@ -13,7 +13,7 @@ export class OpenAIService {
   }
 
   // Generate system prompt based on subject and user context
-  generateSystemPrompt(subject, userName, userRole = 'student') {
+  generateSystemPrompt(subject, userName, userRole = 'student', language = 'english') {
     const subjectContext = {
       'mathematics': 'Mathematics (Algebra, Geometry, Calculus, Statistics)',
       'physics': 'Physics (Mechanics, Thermodynamics, Optics, Quantum Physics)',
@@ -27,6 +27,13 @@ export class OpenAIService {
 
     const subjectName = subjectContext[subject] || 'General academic subjects';
 
+    // Language instructions
+    const languageInstructions = {
+      'hindi': 'Please respond in Hindi (हिंदी). Use Devanagari script.',
+      'hinglish': 'Please respond in Hinglish (mix of Hindi and English). Use both Devanagari script and English as appropriate.',
+      'english': 'Please respond in English.'
+    };
+
     return `You are Geni Ma'am, an AI learning assistant designed to help students with their academic questions. 
 
 CONTEXT:
@@ -34,6 +41,7 @@ CONTEXT:
 - Student Name: ${userName}
 - Student Role: ${userRole}
 - Language Support: English, Hindi, and Hinglish
+- RESPONSE LANGUAGE: ${languageInstructions[language] || languageInstructions['english']}
 
 TEACHING PHILOSOPHY:
 1. **Step-by-step Learning**: Break down complex problems into manageable steps
@@ -65,13 +73,13 @@ Remember to maintain context throughout the conversation and build upon previous
   // Process text message with context
   async processTextMessage(message, context = {}) {
     try {
-      const { subject, userName, userRole, conversationHistory } = context;
+      const { subject, userName, userRole, conversationHistory, language } = context;
       
       // Build conversation history for context
       const messages = [
         {
           role: 'system',
-          content: this.generateSystemPrompt(subject, userName, userRole)
+          content: this.generateSystemPrompt(subject, userName, userRole, language)
         }
       ];
 
@@ -121,13 +129,13 @@ Remember to maintain context throughout the conversation and build upon previous
   // Process image with text message
   async processImageMessage(textMessage, imageUrl, context = {}) {
     try {
-      const { subject, userName, userRole, conversationHistory } = context;
+      const { subject, userName, userRole, conversationHistory, language } = context;
       
       // Build conversation history for context
       const messages = [
         {
           role: 'system',
-          content: this.generateSystemPrompt(subject, userName, userRole)
+          content: this.generateSystemPrompt(subject, userName, userRole, language)
         }
       ];
 
@@ -299,6 +307,76 @@ Remember to maintain context throughout the conversation and build upon previous
         flagged: false,
         categories: {},
         categoryScores: {}
+      };
+    }
+  }
+
+  // Main method for generating text responses (called by chat API)
+  async generateResponse(message, subject, language = 'english') {
+    try {
+      const context = {
+        subject: subject || 'general',
+        userName: 'Student',
+        userRole: 'student',
+        language: language
+      };
+
+      const result = await this.processTextMessage(message, context);
+      
+      if (result.success) {
+        return {
+          content: result.content,
+          tokenUsage: result.usage?.total_tokens || 0,
+          model: result.model
+        };
+      } else {
+        return {
+          content: result.content,
+          tokenUsage: 0,
+          model: 'error'
+        };
+      }
+    } catch (error) {
+      console.error('Generate Response Error:', error);
+      return {
+        content: "I'm sorry, I'm having trouble processing your request right now. Please try again.",
+        tokenUsage: 0,
+        model: 'error'
+      };
+    }
+  }
+
+  // Main method for generating image responses (called by chat API)
+  async generateImageResponse(message, imageUrl, subject, language = 'english') {
+    try {
+      const context = {
+        subject: subject || 'general',
+        userName: 'Student',
+        userRole: 'student',
+        language: language
+      };
+
+      const result = await this.processImageMessage(message, imageUrl, context);
+      
+      if (result.success) {
+        return {
+          content: result.content,
+          tokenUsage: result.usage?.total_tokens || 0,
+          model: result.model
+        };
+      } else {
+        return {
+          content: result.content,
+          tokenUsage: 0,
+          model: 'error'
+        };
+      }
+    } catch (error) {
+      console.error('Generate Image Response Error:', error);
+      return {
+        content: "I'm sorry, I'm having trouble analyzing the image right now. Please try again.",
+        tokenUsage: 0,
+        model: 'error'
       };
     }
   }

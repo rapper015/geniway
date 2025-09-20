@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { SimpleOrchestrator } from '../../../lib/orchestrator/SimpleOrchestrator.js';
+import ChatSessionNew from '../../../../models/ChatSessionNew';
 import jwt from 'jsonwebtoken';
 
 // Initialize the simple orchestrator
@@ -9,7 +10,7 @@ const orchestrator = new SimpleOrchestrator();
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { sessionId, message, messageType = 'text', imageUrl, userId } = body;
+    const { sessionId, message, messageType = 'text', imageUrl, userId, language } = body;
 
     if (!sessionId || !message) {
       return NextResponse.json(
@@ -51,20 +52,43 @@ export async function POST(request) {
             subject: 'general'
           };
 
-          await orchestrator.processStudentInput(
-            sessionId,
-            studentInput,
-            (event) => {
-              // Send event to client
-              const eventData = `data: ${JSON.stringify({
-                type: event.type,
-                data: event.data,
-                timestamp: event.timestamp.toISOString(),
-                sessionId: event.sessionId
-              })}\n\n`;
-              controller.enqueue(encoder.encode(eventData));
-            }
-          );
+          // Call the chat API instead of orchestrator directly
+          console.log('[Solve API] Calling chat API with sessionId:', sessionId);
+          const chatResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/chat`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              message: studentInput.text,
+              messageType: studentInput.type,
+              imageUrl: studentInput.imageUrl,
+              sessionId: sessionId,
+              userId: studentInput.userId,
+              subject: studentInput.subject,
+              language: language
+            })
+          });
+
+          if (chatResponse.ok) {
+            const chatData = await chatResponse.json();
+            
+            // Send AI response event
+            const aiEvent = `data: ${JSON.stringify({
+              type: 'ai_response',
+              data: {
+                content: chatData.aiMessage.content,
+                messageId: chatData.aiMessage.id
+              },
+              timestamp: new Date().toISOString(),
+              sessionId: sessionId
+            })}\n\n`;
+            controller.enqueue(encoder.encode(aiEvent));
+          } else {
+            const errorData = await chatResponse.json();
+            console.error('[Solve API] Chat API error:', errorData);
+            throw new Error(`Chat API error: ${chatResponse.status} - ${errorData.error || 'Unknown error'}`);
+          }
 
           // Send completion event
           const completionEvent = `data: ${JSON.stringify({
@@ -129,11 +153,30 @@ export async function POST(request) {
     const messageType = searchParams.get('type') || 'text';
     const imageUrl = searchParams.get('imageUrl');
     const userId = searchParams.get('userId');
+    const language = searchParams.get('language') || 'english';
 
-    if (!sessionId || !message) {
+    if (!message) {
       return NextResponse.json(
-        { error: 'Session ID and message are required' },
+        { error: 'Message is required' },
         { status: 400 }
+      );
+    }
+
+    // If no sessionId provided, create a simple sessionId (let chat API handle session creation)
+    let actualSessionId = sessionId;
+    console.log('[Solve API] Initial sessionId:', sessionId, 'userId:', userId);
+    if (!actualSessionId && userId) {
+      // Create a simple sessionId and let the chat API create the actual session
+      actualSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      console.log('[Solve API] Created simple sessionId:', actualSessionId);
+    }
+    console.log('[Solve API] Final actualSessionId:', actualSessionId);
+
+    // Ensure we have a valid sessionId
+    if (!actualSessionId) {
+      return NextResponse.json(
+        { error: 'Failed to create or retrieve session ID' },
+        { status: 500 }
       );
     }
 
@@ -153,7 +196,7 @@ export async function POST(request) {
         // Send initial connection event
         const initialEvent = `data: ${JSON.stringify({
           type: 'connection',
-          data: { status: 'connected', sessionId },
+          data: { status: 'connected', sessionId: actualSessionId },
           timestamp: new Date().toISOString()
         })}\n\n`;
         controller.enqueue(encoder.encode(initialEvent));
@@ -170,27 +213,52 @@ export async function POST(request) {
               subject: 'general'
             };
 
-            await orchestrator.processStudentInput(
-              sessionId,
-              studentInput,
-              (event) => {
-                // Send event to client
-                const eventData = `data: ${JSON.stringify({
-                  type: event.type,
-                  data: event.data,
-                  timestamp: event.timestamp.toISOString(),
-                  sessionId: event.sessionId
-                })}\n\n`;
-                controller.enqueue(encoder.encode(eventData));
-              }
-            );
+            // Call the chat API instead of orchestrator directly
+            console.log('[Solve API GET] Calling chat API with actualSessionId:', actualSessionId);
+            const requestBody = {
+              message: studentInput.text,
+              messageType: studentInput.type,
+              imageUrl: studentInput.imageUrl,
+              sessionId: actualSessionId,
+              userId: studentInput.userId,
+              subject: studentInput.subject,
+                language: language
+            };
+            
+            const chatResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/chat`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(requestBody)
+            });
+
+            if (chatResponse.ok) {
+              const chatData = await chatResponse.json();
+              
+              // Send AI response event
+              const aiEvent = `data: ${JSON.stringify({
+                type: 'ai_response',
+                data: {
+                  content: chatData.aiMessage.content,
+                  messageId: chatData.aiMessage.id
+                },
+                timestamp: new Date().toISOString(),
+                sessionId: actualSessionId
+              })}\n\n`;
+              controller.enqueue(encoder.encode(aiEvent));
+            } else {
+              const errorData = await chatResponse.json();
+              console.error('[Solve API] Chat API error:', errorData);
+              throw new Error(`Chat API error: ${chatResponse.status} - ${errorData.error || 'Unknown error'}`);
+            }
 
             // Send completion event
             const completionEvent = `data: ${JSON.stringify({
               type: 'complete',
               data: { status: 'completed' },
               timestamp: new Date().toISOString(),
-              sessionId
+              sessionId: actualSessionId
             })}\n\n`;
             controller.enqueue(encoder.encode(completionEvent));
 
@@ -206,7 +274,7 @@ export async function POST(request) {
                 retryable: true
               },
               timestamp: new Date().toISOString(),
-              sessionId
+              sessionId: actualSessionId
             })}\n\n`;
             controller.enqueue(encoder.encode(errorEvent));
           } finally {

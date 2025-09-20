@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { useProfileCollection } from '../../contexts/ProfileCollectionContext';
 import { 
   ArrowLeft, 
   Settings, 
@@ -14,9 +16,12 @@ import WhatsAppComposer from './WhatsAppComposer';
 import VisionInputModal from './VisionInputModal';
 import { DEFAULT_QUICK_REPLIES } from './QuickRepliesBar';
 import SettingsModal from './SettingsModal';
+import { ProfileCollectionWrapper } from '../ProfileCollectionWrapper';
 
 export default function ChatShell({ subject, onBack }) {
   const { user, isAuthenticated, isGuest, guestUser } = useAuth();
+  const { language } = useLanguage();
+  const { triggerProfileCollection } = useProfileCollection();
   
   // State management
   const [messages, setMessages] = useState([]);
@@ -770,8 +775,11 @@ export default function ChatShell({ subject, onBack }) {
       setCurrentQuiz(null);
       setQuizCompletedForCurrentQuestion(true); // Mark quiz as completed for this question
       
-      // Check if we should ask for profile info based on gotItCount
+      // Trigger profile collection modal after quiz completion
       const existingProfile = JSON.parse(localStorage.getItem('guestProfile') || '{}');
+      triggerProfileCollection(existingProfile);
+      
+      // Check if we should ask for profile info based on gotItCount
       const shouldAskProfile = shouldAskForProfileInfo(gotItCount, existingProfile);
       
       if (shouldAskProfile.ask) {
@@ -937,7 +945,8 @@ export default function ChatShell({ subject, onBack }) {
         message: userInput,
         sessionId: sessionId,
         messageType: 'text',
-        userId: userId
+        userId: userId,
+        language: language
       };
 
       // Only include imageUrl if it exists and is not too large for URL
@@ -1098,7 +1107,37 @@ export default function ChatShell({ subject, onBack }) {
       const eventSource = new EventSource(`/api/solve?${params.toString()}`);
       currentSSERef.current = eventSource;
 
+      // Add connection state logging
+      eventSource.onopen = (event) => {
+        console.log('[ChatShell] SSE connection opened:', event);
+        clearTimeout(connectionTimeout); // Clear the connection timeout
+      };
+
+      // Add a connection timeout to detect if EventSource fails to connect
+      const connectionTimeout = setTimeout(() => {
+        if (eventSource.readyState === EventSource.CONNECTING) {
+          console.error('[ChatShell] EventSource connection timeout - still connecting after 5 seconds');
+          eventSource.close();
+          cleanup();
+          setHideQuickActions(false);
+          
+          // Show error message
+          setMessages(prev => {
+            const newMessages = [...prev];
+            const lastIndex = newMessages.length - 1;
+            if (newMessages[lastIndex]?.type === 'ai') {
+              newMessages[lastIndex] = {
+                ...newMessages[lastIndex],
+                content: "I apologize, but I'm having trouble connecting right now. Please try again."
+              };
+            }
+            return newMessages;
+          });
+        }
+      }, 5000); // 5 second connection timeout
+
       const cleanup = () => {
+        clearTimeout(connectionTimeout); // Clear connection timeout
         if (eventSource.readyState !== EventSource.CLOSED) {
           eventSource.close();
         }
@@ -1217,6 +1256,15 @@ export default function ChatShell({ subject, onBack }) {
 
       eventSource.onerror = (error) => {
         console.error('SSE error:', error);
+        console.error('EventSource readyState:', eventSource.readyState);
+        console.error('EventSource url:', eventSource.url);
+        console.error('Error event details:', {
+          type: error.type,
+          target: error.target,
+          readyState: error.target?.readyState,
+          url: error.target?.url
+        });
+        
         clearTimeout(timeout);
         cleanup();
         // Show quick actions even on error
@@ -1545,6 +1593,9 @@ export default function ChatShell({ subject, onBack }) {
         onComplete={handleVisionComplete}
         onError={handleVisionError}
       />
+
+      {/* Profile Collection Modal */}
+      <ProfileCollectionWrapper />
 
     </div>
   );

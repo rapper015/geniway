@@ -1,5 +1,4 @@
 
-import { connectDB } from '../../../lib/mongodb';
 import ChatSessionNew from '../../../models/ChatSessionNew';
 import { ChatMessage } from '../../../models/ChatMessage';
 import { UserStats } from '../../../models/UserStats';
@@ -67,7 +66,7 @@ export class SimpleOrchestrator {
       // Add user message
       console.log('[SimpleOrchestrator] Adding user message');
       await this.addMessage({
-        sessionId: session._id.toString(),
+        sessionId: session.id,
         userId: studentInput.userId,
         sender: 'user',
         messageType: studentInput.type,
@@ -104,7 +103,7 @@ export class SimpleOrchestrator {
       
       // Add AI message
       const aiMessage = await this.addMessage({
-        sessionId: session._id.toString(),
+        sessionId: session.id,
         userId: studentInput.userId,
         sender: 'ai',
         messageType: 'text',
@@ -127,7 +126,7 @@ export class SimpleOrchestrator {
             isComplete: true
           },
           timestamp: new Date(),
-          sessionId: session._id.toString()
+          sessionId: session.id
         });
 
         onEvent({
@@ -148,13 +147,13 @@ export class SimpleOrchestrator {
             }
           },
           timestamp: new Date(),
-          sessionId: session._id.toString()
+          sessionId: session.id
         });
       }
 
       // Store context for recovery
       try {
-        contextRecovery.storeContextForRecovery(session._id.toString(), context);
+        contextRecovery.storeContextForRecovery(session.id, context);
       } catch (error) {
         console.warn('[SimpleOrchestrator] Failed to store context for recovery:', error);
       }
@@ -201,7 +200,6 @@ export class SimpleOrchestrator {
 
   async getSession(sessionId) {
     try {
-      await connectDB();
       return await ChatSessionNew.findById(sessionId);
     } catch (error) {
       console.error('Error getting session:', error);
@@ -211,18 +209,14 @@ export class SimpleOrchestrator {
 
   async createSession(userId, subject = 'general') {
     try {
-      await connectDB();
-      
-      const session = new ChatSessionNew({
+      const savedSession = await ChatSessionNew.create({
         userId,
         subject,
         title: `Chat - ${new Date().toLocaleDateString()}`,
         messageCount: 0,
-        createdAt: new Date(),
-        lastActive: new Date()
+        createdAt: new Date().toISOString(),
+        lastActive: new Date().toISOString()
       });
-
-      const savedSession = await session.save();
       
       // Initialize user stats if not exists
       await this.ensureUserStats(userId);
@@ -236,31 +230,27 @@ export class SimpleOrchestrator {
 
   async addMessage(messageData) {
     try {
-      await connectDB();
-      
-      const message = new ChatMessage({
+      const savedMessage = await ChatMessage.create({
         sessionId: messageData.sessionId,
         userId: messageData.userId,
         sender: messageData.sender,
         messageType: messageData.messageType,
         content: messageData.content,
         imageUrl: messageData.imageUrl,
-        createdAt: new Date()
+        createdAt: new Date().toISOString()
       });
-
-      const savedMessage = await message.save();
 
       // Update session message count
-      await ChatSessionNew.findByIdAndUpdate(messageData.sessionId, {
-        $inc: { messageCount: 1 },
-        lastActive: new Date()
-      });
+      const session = await ChatSessionNew.findById(messageData.sessionId);
+      if (session) {
+        await session.addMessage(savedMessage.id);
+      }
 
       // Update user stats
       await this.updateMessageStats(messageData.userId, messageData.messageType);
 
       return {
-        id: savedMessage._id.toString(),
+        id: savedMessage.id,
         sessionId: messageData.sessionId,
         userId: messageData.userId,
         sender: messageData.sender,
@@ -279,7 +269,7 @@ export class SimpleOrchestrator {
   async generateResponse(studentInput, session) {
     try {
       // Get recent conversation history
-      const messages = await this.getRecentMessages(session._id.toString(), 10);
+      const messages = await this.getRecentMessages(session.id, 10);
       
       // Build conversation context
       const conversationHistory = messages.map(msg => ({
@@ -336,14 +326,11 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
 
   async getRecentMessages(sessionId, limit = 50) {
     try {
-      await connectDB();
       
-      const messages = await ChatMessage.find({ sessionId })
-        .sort({ createdAt: -1 })
-        .limit(limit);
+      const messages = await ChatMessage.getSessionMessages(sessionId, limit, 0);
 
       return messages.map(msg => ({
-        id: msg._id.toString(),
+        id: msg.id,
         sessionId: msg.sessionId,
         userId: msg.userId,
         sender: msg.sender,
@@ -351,7 +338,7 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
         content: msg.content,
         imageUrl: msg.imageUrl,
         timestamp: msg.createdAt
-      })).reverse();
+      }));
     } catch (error) {
       console.error('Error getting recent messages:', error);
       return [];
@@ -360,9 +347,9 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
 
   async ensureUserStats(userId) {
     try {
-      const existingStats = await UserStats.findOne({ userId });
+      const existingStats = await UserStats.findByUserId(userId);
       if (!existingStats) {
-        const stats = new UserStats({
+        await UserStats.create({
           userId,
           totalSessions: 0,
           totalMessages: 0,
@@ -370,11 +357,8 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
           totalVoiceMessages: 0,
           totalImageMessages: 0,
           totalTokensUsed: 0,
-          lastActive: new Date(),
-          createdAt: new Date(),
-          updatedAt: new Date()
+          lastActive: new Date().toISOString()
         });
-        await stats.save();
       }
     } catch (error) {
       console.error('Error ensuring user stats:', error);
@@ -383,28 +367,12 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
 
   async updateMessageStats(userId, messageType) {
     try {
-      const updateFields = {
-        $inc: { totalMessages: 1 },
-        $set: { lastActive: new Date(), updatedAt: new Date() }
-      };
-
-      switch (messageType) {
-        case 'text':
-          updateFields.$inc.totalTextMessages = 1;
-          break;
-        case 'voice':
-          updateFields.$inc.totalVoiceMessages = 1;
-          break;
-        case 'image':
-          updateFields.$inc.totalImageMessages = 1;
-          break;
+      let userStats = await UserStats.findByUserId(userId);
+      if (!userStats) {
+        userStats = await UserStats.create({ userId });
       }
 
-      await UserStats.findOneAndUpdate(
-        { userId },
-        updateFields,
-        { upsert: true }
-      );
+      await userStats.incrementMessages(messageType);
     } catch (error) {
       console.error('Error updating message stats:', error);
     }
@@ -413,15 +381,15 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
   // Build tutoring context from session and student input
   async buildTutoringContext(session, studentInput) {
     try {
-      console.log('[SimpleOrchestrator] Building tutoring context for session:', session._id);
+      console.log('[SimpleOrchestrator] Building tutoring context for session:', session.id);
       
       // Try to get messages with fallback mechanisms
-      const messages = await this.getMessagesWithFallback(session._id);
+      const messages = await this.getMessagesWithFallback(session.id);
 
       console.log('[SimpleOrchestrator] Retrieved messages:', messages.length);
 
       return {
-        sessionId: session._id.toString(),
+        sessionId: session.id,
         userId: studentInput.userId,
         subject: session.subject || 'general',
         currentInput: studentInput.text,
@@ -438,7 +406,7 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
       console.error('[SimpleOrchestrator] Error building tutoring context:', error);
       // Return minimal context as fallback
       return {
-        sessionId: session._id.toString(),
+        sessionId: session.id,
         userId: studentInput.userId,
         subject: session.subject || 'general',
         currentInput: studentInput.text,
@@ -458,38 +426,15 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
   async getMessagesWithFallback(sessionId) {
     try {
       // Primary: Get all messages from database
-      const allMessages = await ChatMessage.find({ sessionId })
-        .sort({ timestamp: 1 });
+      const allMessages = await ChatMessage.getSessionMessages(sessionId, 100, 0);
 
       if (allMessages.length > 0) {
         // Apply context compression for long conversations
         return this.compressMessageHistory(allMessages, 50);
       }
 
-      // Fallback 1: Try with different query parameters
-      console.log('[SimpleOrchestrator] Primary query failed, trying fallback 1');
-      const fallbackMessages = await ChatMessage.find({ 
-        sessionId: sessionId.toString() 
-      }).sort({ createdAt: 1 }).limit(100);
-
-      if (fallbackMessages.length > 0) {
-        return this.compressMessageHistory(fallbackMessages, 50);
-      }
-
-      // Fallback 2: Try with ObjectId conversion
-      console.log('[SimpleOrchestrator] Fallback 1 failed, trying fallback 2');
-      const mongoose = await import('mongoose');
-      const objectIdSessionId = new mongoose.default.Types.ObjectId(sessionId);
-      const objectIdMessages = await ChatMessage.find({ 
-        sessionId: objectIdSessionId 
-      }).sort({ timestamp: 1 }).limit(100);
-
-      if (objectIdMessages.length > 0) {
-        return this.compressMessageHistory(objectIdMessages, 50);
-      }
-
-      // Fallback 3: Return empty array with warning
-      console.warn('[SimpleOrchestrator] All message retrieval methods failed, returning empty history');
+      // Fallback: Return empty array with warning
+      console.warn('[SimpleOrchestrator] No messages found for session:', sessionId);
       return [];
 
     } catch (error) {
@@ -528,7 +473,7 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
     
     // Remove duplicates based on message ID
     const uniqueMessages = compressedMessages.filter((message, index, self) => 
-      index === self.findIndex(m => m._id.toString() === message._id.toString())
+      index === self.findIndex(m => m.id === message.id)
     );
     
     // Sort by timestamp to maintain chronological order

@@ -1,23 +1,64 @@
 import { NextResponse } from 'next/server';
-import { connectDB } from '../../../../../lib/mongodb';
 import { User } from '../../../../../models/User';
 
 // GET - Load user profile
 export async function GET(request, { params }) {
   try {
-    const { userId } = params;
+    const { userId } = await params;
     
     if (!userId) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
-    await connectDB();
-
     // Find user by ID or email
     let user = await User.findById(userId);
     if (!user) {
       // Try to find by email if ID doesn't work
-      user = await User.findOne({ email: userId });
+      user = await User.findByEmail(userId);
+    }
+
+    // If user not found and it's a guest user, create a default profile
+    if (!user && userId.startsWith('guest_')) {
+      console.log('[Profile API] Creating default guest profile for:', userId);
+      
+      // Create a default guest user profile
+      user = await User.create({
+        name: 'Guest User',
+        firstName: 'Guest',
+        lastName: 'User',
+        email: `${userId}@geniway.local`,
+        role: 'student',
+        grade: null,
+        isGuest: true,
+        board: 'CBSE',
+        subjects: [],
+        state: '',
+        city: '',
+        langPref: 'en',
+        teachingLanguage: 'English',
+        pace: 'Normal',
+        learningStyle: 'Text',
+        learningStyles: ['Text'],
+        contentMode: 'step-by-step',
+        fastTrackEnabled: false,
+        saveChatHistory: true,
+        studyStreaksEnabled: true,
+        breakRemindersEnabled: true,
+        masteryNudgesEnabled: true,
+        dataSharingEnabled: false,
+        ageBand: '11-14',
+        profileCompletionStep: 0,
+        profileCompleted: false,
+        totalQuestionsAsked: 0,
+        totalQuizzesCompleted: 0,
+        averageQuizScore: 0,
+        lastActiveSession: new Date().toISOString(),
+        totalSessions: 0,
+        preferences: {
+          language: 'en',
+          notifications: true
+        }
+      });
     }
 
     if (!user) {
@@ -26,7 +67,7 @@ export async function GET(request, { params }) {
 
     // Transform user data to match frontend expectations
     const profile = {
-      user_id: user._id.toString(),
+      user_id: user.id,
       first_name: user.firstName || user.name?.split(' ')[0] || '',
       last_name: user.lastName || user.name?.split(' ').slice(1).join(' ') || '',
       preferred_name: user.preferredName || '',
@@ -51,7 +92,7 @@ export async function GET(request, { params }) {
     };
 
     const userData = {
-      id: user._id.toString(),
+      id: user.id,
       email: user.email,
       role: user.role,
       age_band: user.ageBand || '11-14'
@@ -75,19 +116,61 @@ export async function GET(request, { params }) {
 // PATCH - Update user profile
 export async function PATCH(request, { params }) {
   try {
-    const { userId } = params;
+    const { userId } = await params;
     const updateData = await request.json();
 
     if (!userId) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
-    await connectDB();
-
     // Find user by ID or email
     let user = await User.findById(userId);
     if (!user) {
-      user = await User.findOne({ email: userId });
+      user = await User.findByEmail(userId);
+    }
+
+    // If user not found and it's a guest user, create a default profile
+    if (!user && userId.startsWith('guest_')) {
+      console.log('[Profile API] Creating default guest profile for PATCH:', userId);
+      
+      // Create a default guest user profile
+      user = await User.create({
+        name: 'Guest User',
+        firstName: 'Guest',
+        lastName: 'User',
+        email: `${userId}@geniway.local`,
+        role: 'student',
+        grade: null,
+        isGuest: true,
+        board: 'CBSE',
+        subjects: [],
+        state: '',
+        city: '',
+        langPref: 'en',
+        teachingLanguage: 'English',
+        pace: 'Normal',
+        learningStyle: 'Text',
+        learningStyles: ['Text'],
+        contentMode: 'step-by-step',
+        fastTrackEnabled: false,
+        saveChatHistory: true,
+        studyStreaksEnabled: true,
+        breakRemindersEnabled: true,
+        masteryNudgesEnabled: true,
+        dataSharingEnabled: false,
+        ageBand: '11-14',
+        profileCompletionStep: 0,
+        profileCompleted: false,
+        totalQuestionsAsked: 0,
+        totalQuizzesCompleted: 0,
+        averageQuizScore: 0,
+        lastActiveSession: new Date().toISOString(),
+        totalSessions: 0,
+        preferences: {
+          language: 'en',
+          notifications: true
+        }
+      });
     }
 
     if (!user) {
@@ -125,11 +208,7 @@ export async function PATCH(request, { params }) {
     }
 
     // Update the user
-    const updatedUser = await User.findByIdAndUpdate(
-      user._id,
-      { $set: mappedUpdates },
-      { new: true, runValidators: true }
-    );
+    const updatedUser = await User.updateById(user.id, mappedUpdates);
 
     if (!updatedUser) {
       return NextResponse.json({ error: 'Failed to update user' }, { status: 500 });
@@ -137,7 +216,7 @@ export async function PATCH(request, { params }) {
 
     // Return updated profile data
     const profile = {
-      user_id: updatedUser._id.toString(),
+      user_id: updatedUser.id,
       first_name: updatedUser.firstName || updatedUser.name?.split(' ')[0] || '',
       last_name: updatedUser.lastName || updatedUser.name?.split(' ').slice(1).join(' ') || '',
       preferred_name: updatedUser.preferredName || '',
@@ -162,7 +241,7 @@ export async function PATCH(request, { params }) {
     };
 
     const userData = {
-      id: updatedUser._id.toString(),
+      id: updatedUser.id,
       email: updatedUser.email,
       role: updatedUser.role,
       age_band: updatedUser.ageBand || '11-14'
