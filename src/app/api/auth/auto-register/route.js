@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { connectDB } from '../../../../../lib/mongodb';
 import { User } from '../../../../../models/User';
 import jwt from 'jsonwebtoken';
 
@@ -35,14 +34,12 @@ export async function POST(request) {
       );
     }
 
-    await connectDB();
-
     // Create a temporary email for guest users
     const tempEmail = `guest_${Date.now()}@geniway.local`;
     const fullName = `${firstName} ${lastName}`;
 
     // Create new user with comprehensive profile
-    const user = new User({
+    const user = await User.create({
       name: fullName,
       firstName: firstName,
       lastName: lastName,
@@ -75,7 +72,7 @@ export async function POST(request) {
       totalQuizzesCompleted: 0,
       averageQuizScore: 0,
       // Session information
-      lastActiveSession: new Date(),
+      lastActiveSession: new Date().toISOString(),
       totalSessions: 1,
       preferences: {
         language: 'en',
@@ -83,12 +80,10 @@ export async function POST(request) {
       }
     });
 
-    await user.save();
-
     // Generate JWT token
     const token = jwt.sign(
       { 
-        userId: user._id, 
+        userId: user.id, 
         email: user.email,
         isGuest: user.isGuest 
       },

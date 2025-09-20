@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { connectDB } from '../../../../../lib/mongodb';
 import { User } from '../../../../../models/User';
 import jwt from 'jsonwebtoken';
 
@@ -44,20 +43,13 @@ export async function PUT(request) {
       );
     }
 
-    await connectDB();
-
     // Update user
-    const updatedUser = await User.findByIdAndUpdate(
-      decoded.userId,
-      {
-        name: name.trim(),
-        grade: role === 'student' ? grade : null,
-        school: school?.trim() || null,
-        role: role || 'student',
-        updatedAt: new Date()
-      },
-      { new: true, runValidators: true }
-    );
+    const updatedUser = await User.updateById(decoded.userId, {
+      name: name.trim(),
+      grade: role === 'student' ? grade : null,
+      school: school?.trim() || null,
+      role: role || 'student'
+    });
 
     if (!updatedUser) {
       return NextResponse.json(

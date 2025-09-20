@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { connectDB } from '../../../../lib/mongodb';
-import { ChatSessionNew } from '../../../../models';
+import ChatSessionNew from '../../../../models/ChatSessionNew';
 
 export async function POST(request) {
   try {
@@ -13,8 +12,6 @@ export async function POST(request) {
       );
     }
 
-    await connectDB();
-
     console.log('Creating session with data:', {
       userId: userId,
       userIdType: typeof userId,
@@ -23,29 +20,25 @@ export async function POST(request) {
     });
 
     // Create new chat session with userId for all users (including guests)
-    const sessionData = {
+    const session = await ChatSessionNew.create({
       userId: userId.toString(), // Always include userId for user-specific sessions
       subject: subject || 'general',
       isGuest: isGuest,
       status: 'active',
       messages: [],
       metadata: {
-        createdAt: new Date(),
-        lastActivity: new Date()
+        createdAt: new Date().toISOString(),
+        lastActivity: new Date().toISOString()
       }
-    };
-
-    const session = new ChatSessionNew(sessionData);
+    });
 
     console.log('Session object created:', session);
 
-    await session.save();
-
     return NextResponse.json({
       success: true,
-      sessionId: session._id.toString(),
+      sessionId: session.id,
       session: {
-        id: session._id.toString(),
+        id: session.id,
         userId: session.userId,
         subject: session.subject,
         isGuest: session.isGuest,
@@ -76,17 +69,18 @@ export async function GET(request) {
       );
     }
 
-    await connectDB();
-
     let session;
     if (sessionId) {
       session = await ChatSessionNew.findById(sessionId);
     } else {
       // Find the most recent active session for the user
-      session = await ChatSessionNew.findOne({ 
+      const sessions = await ChatSessionNew.find({ 
         userId: userId, 
         status: 'active' 
-      }).sort({ createdAt: -1 });
+      });
+      // Sort by creation time (newest first)
+      sessions.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      session = sessions[0] || null;
     }
 
     if (!session) {
@@ -99,7 +93,7 @@ export async function GET(request) {
     return NextResponse.json({
       success: true,
       session: {
-        id: session._id.toString(),
+        id: session.id,
         userId: session.userId,
         subject: session.subject,
         isGuest: session.isGuest,

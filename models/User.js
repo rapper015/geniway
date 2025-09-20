@@ -1,252 +1,201 @@
-import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import { replitDB } from '../lib/replit-db.js';
 
-const userSchema = new mongoose.Schema({
-  // Basic Authentication
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-    lowercase: true,
-    trim: true
-  },
-  password: {
-    type: String,
-    required: false, // Not required for auto-registered guest users
-    minlength: 6
-  },
-  
-  // Profile Information
-  name: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  firstName: {
-    type: String,
-    trim: true
-  },
-  lastName: {
-    type: String,
-    trim: true
-  },
-  preferredName: {
-    type: String,
-    trim: true
-  },
-  whatsappNumber: {
-    type: String,
-    trim: true
-  },
-  
-  // Academic Information
-  role: {
-    type: String,
-    enum: ['student', 'parent', 'teacher', 'other'],
-    default: 'student'
-  },
-  grade: {
-    type: Number,
-    min: 1,
-    max: 12
-  },
-  board: {
-    type: String,
-    enum: ['CBSE', 'ICSE', 'State Board', 'IB', 'IGCSE', 'Other'],
-    default: 'CBSE'
-  },
-  state: {
-    type: String,
-    trim: true
-  },
-  city: {
-    type: String,
-    trim: true
-  },
-  school: {
-    type: String,
-    trim: true
-  },
-  subjects: [{
-    type: String,
-    enum: ['Mathematics', 'Physics', 'Chemistry', 'Biology', 'English', 'Hindi', 'Social Science', 'Computer Science', 'Sanskrit']
-  }],
-  
-  // Language Preferences
-  langPref: {
-    type: String,
-    enum: ['en', 'hi', 'ta', 'bn', 'te', 'mr', 'gu', 'kn', 'ml', 'pa', 'ur'],
-    default: 'en'
-  },
-  teachingLanguage: {
-    type: String,
-    enum: ['English', 'Hindi', 'Tamil', 'Telugu', 'Bengali', 'Marathi', 'Gujarati', 'Kannada', 'Malayalam', 'Punjabi', 'Urdu'],
-    default: 'English'
-  },
-  
-  // Learning Preferences
-  pace: {
-    type: String,
-    enum: ['Fast', 'Normal', 'Detailed'],
-    default: 'Normal'
-  },
-  learningStyle: {
-    type: String,
-    enum: ['Visual', 'Voice', 'Text', 'Kinesthetic'],
-    default: 'Text'
-  },
-  learningStyles: [{
-    type: String,
-    enum: ['Visual', 'Voice', 'Text', 'Kinesthetic']
-  }],
-  contentMode: {
-    type: String,
-    enum: ['step-by-step', 'quick-answer'],
-    default: 'step-by-step'
-  },
-  fastTrackEnabled: {
-    type: Boolean,
-    default: false
-  },
-  
-  // Chat & History
-  saveChatHistory: {
-    type: Boolean,
-    default: true
-  },
-  
-  // Notifications
-  studyStreaksEnabled: {
-    type: Boolean,
-    default: true
-  },
-  breakRemindersEnabled: {
-    type: Boolean,
-    default: true
-  },
-  masteryNudgesEnabled: {
-    type: Boolean,
-    default: true
-  },
-  
-  // Privacy & Data
-  dataSharingEnabled: {
-    type: Boolean,
-    default: false
-  },
-  
-  // System Fields
-  isGuest: {
-    type: Boolean,
-    default: false
-  },
-  ageBand: {
-    type: String,
-    enum: ['6-10', '11-14', '15-18', '18+'],
-    default: '11-14'
-  },
-  
-  // Profile Collection Tracking
-  profileCompletionStep: {
-    type: Number,
-    default: 0,
-    min: 0,
-    max: 9
-  },
-  profileCompleted: {
-    type: Boolean,
-    default: false
-  },
-  
-  // Additional Contact Information
-  phoneNumber: {
-    type: String,
-    trim: true
-  },
-  
-  // Learning Analytics
-  totalQuestionsAsked: {
-    type: Number,
-    default: 0
-  },
-  totalQuizzesCompleted: {
-    type: Number,
-    default: 0
-  },
-  averageQuizScore: {
-    type: Number,
-    default: 0,
-    min: 0,
-    max: 100
-  },
-  
-  // Session Information
-  lastActiveSession: {
-    type: Date,
-    default: Date.now
-  },
-  totalSessions: {
-    type: Number,
-    default: 0
-  },
-  
-  // Legacy preferences (for backward compatibility)
-  preferences: {
-    language: {
-      type: String,
-      default: 'en'
-    },
-    notifications: {
-      type: Boolean,
-      default: true
+export class User {
+  constructor(data = {}) {
+    // Basic Authentication
+    this.email = data.email || '';
+    this.password = data.password || '';
+    
+    // Profile Information
+    this.name = data.name || '';
+    this.firstName = data.firstName || '';
+    this.lastName = data.lastName || '';
+    this.preferredName = data.preferredName || '';
+    this.whatsappNumber = data.whatsappNumber || '';
+    
+    // Academic Information
+    this.role = data.role || 'student';
+    this.grade = data.grade || null;
+    this.board = data.board || 'CBSE';
+    this.state = data.state || '';
+    this.city = data.city || '';
+    this.school = data.school || '';
+    this.subjects = data.subjects || [];
+    
+    // Language Preferences
+    this.langPref = data.langPref || 'en';
+    this.teachingLanguage = data.teachingLanguage || 'English';
+    
+    // Learning Preferences
+    this.pace = data.pace || 'Normal';
+    this.learningStyle = data.learningStyle || 'Text';
+    this.learningStyles = data.learningStyles || [];
+    this.contentMode = data.contentMode || 'step-by-step';
+    this.fastTrackEnabled = data.fastTrackEnabled || false;
+    
+    // Chat & History
+    this.saveChatHistory = data.saveChatHistory !== false;
+    
+    // Notifications
+    this.studyStreaksEnabled = data.studyStreaksEnabled !== false;
+    this.breakRemindersEnabled = data.breakRemindersEnabled !== false;
+    this.masteryNudgesEnabled = data.masteryNudgesEnabled !== false;
+    
+    // Privacy & Data
+    this.dataSharingEnabled = data.dataSharingEnabled || false;
+    
+    // System Fields
+    this.isGuest = data.isGuest || false;
+    this.ageBand = data.ageBand || '11-14';
+    
+    // Profile Collection Tracking
+    this.profileCompletionStep = data.profileCompletionStep || 0;
+    this.profileCompleted = data.profileCompleted || false;
+    
+    // Additional Contact Information
+    this.phoneNumber = data.phoneNumber || '';
+    
+    // Learning Analytics
+    this.totalQuestionsAsked = data.totalQuestionsAsked || 0;
+    this.totalQuizzesCompleted = data.totalQuizzesCompleted || 0;
+    this.averageQuizScore = data.averageQuizScore || 0;
+    
+    // Session Information
+    this.lastActiveSession = data.lastActiveSession || new Date().toISOString();
+    this.totalSessions = data.totalSessions || 0;
+    
+    // Legacy preferences (for backward compatibility)
+    this.preferences = data.preferences || {
+      language: 'en',
+      notifications: true
+    };
+    
+    // Timestamps
+    this.createdAt = data.createdAt || new Date().toISOString();
+    this.updatedAt = data.updatedAt || new Date().toISOString();
+  }
+
+  // Static methods for database operations
+  static async create(userData) {
+    const user = new User(userData);
+    
+    // Hash password if provided
+    if (user.password) {
+      user.password = await bcrypt.hash(user.password, 12);
     }
-  },
-  
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
+    
+    // Generate unique ID
+    const id = replitDB.generateId();
+    
+    // Save to database
+    const savedUser = await replitDB.create('user', id, user);
+    return new User(savedUser);
   }
-});
 
-// Hash password before saving (only if password exists)
-userSchema.pre('save', async function(next) {
-  if (!this.isModified('password') || !this.password) return next();
-  
-  try {
-    const saltRounds = 12;
-    this.password = await bcrypt.hash(this.password, saltRounds);
-    next();
-  } catch (error) {
-    next(error);
+  static async findById(id) {
+    const userData = await replitDB.findById('user', id);
+    return userData ? new User(userData) : null;
   }
-});
 
-// Update the updatedAt field before saving
-userSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
-});
+  static async findByEmail(email) {
+    const userData = await replitDB.findOne('user', { email: email.toLowerCase() });
+    return userData ? new User(userData) : null;
+  }
 
-// Instance method to validate password
-userSchema.methods.validatePassword = async function(password) {
-  return await bcrypt.compare(password, this.password);
-};
+  static async findOne(query) {
+    const userData = await replitDB.findOne('user', query);
+    return userData ? new User(userData) : null;
+  }
 
-// Instance method to hash password (for manual hashing if needed)
-userSchema.methods.hashPassword = async function() {
-  const saltRounds = 12;
-  this.password = await bcrypt.hash(this.password, saltRounds);
-};
+  static async find(query = {}) {
+    const usersData = await replitDB.find('user', query);
+    return usersData.map(userData => new User(userData));
+  }
 
-// Transform JSON output to remove password
-userSchema.methods.toJSON = function() {
-  const userObject = this.toObject();
-  delete userObject.password;
-  return userObject;
-};
+  static async updateById(id, updateData) {
+    const updatedData = await replitDB.update('user', id, updateData);
+    return new User(updatedData);
+  }
 
-export const User = mongoose.models.User || mongoose.model('User', userSchema);
+  static async deleteById(id) {
+    return await replitDB.delete('user', id);
+  }
+
+  static async count(query = {}) {
+    return await replitDB.count('user', query);
+  }
+
+  // Instance methods
+  async save() {
+    if (this.id) {
+      // Update existing user
+      const updatedData = await replitDB.update('user', this.id, this);
+      Object.assign(this, updatedData);
+      return this;
+    } else {
+      // Create new user
+      const id = replitDB.generateId();
+      const savedData = await replitDB.create('user', id, this);
+      Object.assign(this, savedData);
+      return this;
+    }
+  }
+
+  async validatePassword(password) {
+    if (!this.password) return false;
+    return await bcrypt.compare(password, this.password);
+  }
+
+  async hashPassword() {
+    if (this.password) {
+      this.password = await bcrypt.hash(this.password, 12);
+    }
+  }
+
+  toJSON() {
+    const userObject = { ...this };
+    delete userObject.password;
+    return userObject;
+  }
+
+  // Validation methods
+  validate() {
+    const errors = [];
+    
+    if (!this.email) {
+      errors.push('Email is required');
+    } else if (!this.isValidEmail(this.email)) {
+      errors.push('Invalid email format');
+    }
+    
+    if (!this.name || this.name.trim().length === 0) {
+      errors.push('Name is required');
+    }
+    
+    if (this.password && this.password.length < 6) {
+      errors.push('Password must be at least 6 characters long');
+    }
+    
+    if (this.role && !['student', 'parent', 'teacher', 'other'].includes(this.role)) {
+      errors.push('Invalid role');
+    }
+    
+    if (this.grade && (this.grade < 1 || this.grade > 12)) {
+      errors.push('Grade must be between 1 and 12');
+    }
+    
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  }
+
+  isValidEmail(email) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  }
+}
+
+// Export for backward compatibility
+export { User as default };

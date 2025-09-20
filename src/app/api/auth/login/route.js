@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { connectDB } from '../../../../../lib/mongodb';
 import { User } from '../../../../../models/User';
 import jwt from 'jsonwebtoken';
 
@@ -15,10 +14,8 @@ export async function POST(request) {
       );
     }
 
-    await connectDB();
-
     // Find user by email
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const user = await User.findByEmail(email.toLowerCase());
     if (!user) {
       return NextResponse.json(
         { error: 'Invalid email or password' },
@@ -39,7 +36,7 @@ export async function POST(request) {
     // Create JWT token
     const token = jwt.sign(
       { 
-        userId: user._id.toString(),
+        userId: user.id,
         email: user.email,
         role: user.role
       },

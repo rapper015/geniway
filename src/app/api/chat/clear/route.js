@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { connectDB } from '../../../../../lib/mongodb';
 import ChatSession from '../../../../../models/ChatSession';
 import { ChatMessage } from '../../../../../models/ChatMessage';
 import { UserStats } from '../../../../../models/UserStats';
@@ -15,43 +14,46 @@ export async function DELETE(request) {
       );
     }
 
-    await connectDB();
-
     // Get all sessions for the user
     const sessions = await ChatSession.find({ userId });
-    const sessionIds = sessions.map(session => session._id);
+    const sessionIds = sessions.map(session => session.id);
 
+    let deletedMessages = 0;
     // Delete all messages for these sessions
-    const messageDeleteResult = await ChatMessage.deleteMany({
-      sessionId: { $in: sessionIds }
-    });
+    for (const sessionId of sessionIds) {
+      const messages = await ChatMessage.findBySessionId(sessionId);
+      for (const message of messages) {
+        await ChatMessage.deleteById(message.id);
+        deletedMessages++;
+      }
+    }
 
+    let deletedSessions = 0;
     // Delete all sessions
-    const sessionDeleteResult = await ChatSession.deleteMany({ userId });
+    for (const session of sessions) {
+      await ChatSession.deleteById(session.id);
+      deletedSessions++;
+    }
 
     // Reset user stats
-    await UserStats.findOneAndUpdate(
-      { userId },
-      {
-        $set: {
-          totalSessions: 0,
-          totalMessages: 0,
-          totalTextMessages: 0,
-          totalVoiceMessages: 0,
-          totalImageMessages: 0,
-          totalTokensUsed: 0,
-          lastActive: new Date(),
-          updatedAt: new Date()
-        }
-      },
-      { upsert: true }
-    );
+    let userStats = await UserStats.findByUserId(userId);
+    if (userStats) {
+      await UserStats.updateById(userStats.id, {
+        totalSessions: 0,
+        totalMessages: 0,
+        totalTextMessages: 0,
+        totalVoiceMessages: 0,
+        totalImageMessages: 0,
+        totalTokensUsed: 0,
+        lastActive: new Date().toISOString()
+      });
+    }
 
     return NextResponse.json({
       success: true,
       message: 'Chat history cleared successfully',
-      deletedSessions: sessionDeleteResult.deletedCount,
-      deletedMessages: messageDeleteResult.deletedCount
+      deletedSessions: deletedSessions,
+      deletedMessages: deletedMessages
     });
   } catch (error) {
     console.error('Clear chat history error:', error);

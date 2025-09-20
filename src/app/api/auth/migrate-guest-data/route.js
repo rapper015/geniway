@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { connectDB } from '../../../../../lib/mongodb';
 import { User } from '../../../../../models/User';
 import ChatSessionNew from '../../../../../models/ChatSessionNew';
 import { ChatMessage } from '../../../../../models/ChatMessage';
 import { UserStats } from '../../../../../models/UserStats';
+import { replitDB } from '../../../../../lib/replit-db';
 import jwt from 'jsonwebtoken';
 
 export async function POST(request) {
@@ -39,8 +39,6 @@ export async function POST(request) {
       );
     }
 
-    await connectDB();
-
     // Verify user exists
     const user = await User.findById(userId);
     if (!user) {
@@ -57,32 +55,31 @@ export async function POST(request) {
     if (sessions && sessions.length > 0) {
       for (const session of sessions) {
         // Create session document
-        const sessionDoc = new ChatSessionNew({
+        const savedSession = await ChatSessionNew.create({
           userId: userId,
           subject: session.subject,
           title: session.title || 'Migrated Chat',
           messageCount: session.messageCount || 0,
-          createdAt: new Date(session.createdAt),
-          lastActive: new Date(session.lastActive || session.createdAt)
+          createdAt: session.createdAt,
+          lastActive: session.lastActive || session.createdAt
         });
 
-        const savedSession = await sessionDoc.save();
-        const sessionId = savedSession._id;
+        const sessionId = savedSession.id;
 
         // Migrate messages
         if (session.messages && session.messages.length > 0) {
-          const messageDocs = session.messages.map(message => ({
-            sessionId: sessionId,
-            userId: userId,
-            sender: message.type,
-            messageType: message.messageType,
-            content: message.content,
-            imageUrl: message.imageUrl,
-            createdAt: new Date(message.timestamp)
-          }));
-
-          await ChatMessage.insertMany(messageDocs);
-          migratedMessages += messageDocs.length;
+          for (const message of session.messages) {
+            await ChatMessage.create({
+              sessionId: sessionId,
+              userId: userId,
+              sender: message.type,
+              messageType: message.messageType,
+              content: message.content,
+              imageUrl: message.imageUrl,
+              createdAt: message.timestamp
+            });
+            migratedMessages++;
+          }
         }
 
         migratedSessions++;
@@ -91,7 +88,7 @@ export async function POST(request) {
 
     // Migrate user statistics
     if (stats) {
-      const userStats = new UserStats({
+      await UserStats.create({
         userId: userId,
         totalSessions: stats.totalSessions || 0,
         totalMessages: stats.totalMessages || 0,
@@ -99,21 +96,14 @@ export async function POST(request) {
         totalVoiceMessages: stats.totalVoiceMessages || 0,
         totalImageMessages: stats.totalImageMessages || 0
       });
-
-      await userStats.save();
     }
 
     // Update user preferences
     if (preferences) {
-      await User.findByIdAndUpdate(
-        userId,
-        {
-          $set: {
-            preferences: preferences,
-            lastMigrated: new Date()
-          }
-        }
-      );
+      await User.updateById(userId, {
+        preferences: preferences,
+        lastMigrated: new Date().toISOString()
+      });
     }
 
     // Create migration record
@@ -122,18 +112,18 @@ export async function POST(request) {
       guestId: guestId,
       migratedSessions: migratedSessions,
       migratedMessages: migratedMessages,
-      migratedAt: new Date(),
+      migratedAt: new Date().toISOString(),
       status: 'completed'
     };
 
-    await db.collection('guest_migrations').insertOne(migrationRecord);
+    await replitDB.create('guest_migration', replitDB.generateId(), migrationRecord);
 
     return NextResponse.json({
       success: true,
       message: 'Guest data migrated successfully',
       migratedSessions,
       migratedMessages,
-      migrationId: migrationRecord._id
+      migrationId: migrationRecord.id
     });
 
   } catch (error) {

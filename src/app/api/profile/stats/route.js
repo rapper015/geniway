@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { connectDB } from '../../../../../lib/mongodb';
 import { UserStats } from '../../../../../models/UserStats';
 import jwt from 'jsonwebtoken';
 
@@ -27,10 +26,8 @@ export async function GET(request) {
       );
     }
 
-    await connectDB();
-
     // Get user statistics
-    const userStats = await UserStats.findOne({ userId: decoded.userId }).lean();
+    const userStats = await UserStats.findByUserId(decoded.userId);
 
     if (!userStats) {
       // Return default stats if no stats found
@@ -41,7 +38,7 @@ export async function GET(request) {
         totalVoiceMessages: 0,
         totalImageMessages: 0,
         totalTokensUsed: 0,
-        lastActive: new Date()
+        lastActive: new Date().toISOString()
       });
     }
 

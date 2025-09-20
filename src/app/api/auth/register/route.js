@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { connectDB } from '../../../../../lib/mongodb';
 import { User } from '../../../../../models/User';
 import jwt from 'jsonwebtoken';
 
@@ -29,10 +28,8 @@ export async function POST(request) {
       );
     }
 
-    await connectDB();
-
     // Check if user already exists
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    const existingUser = await User.findByEmail(email.toLowerCase());
     if (existingUser) {
       return NextResponse.json(
         { error: 'User with this email already exists' },
@@ -41,7 +38,7 @@ export async function POST(request) {
     }
 
     // Create new user
-    const userData = new User({
+    const result = await User.create({
       email: email.toLowerCase(),
       password,
       name,
@@ -49,16 +46,13 @@ export async function POST(request) {
       grade,
       school
     });
-
-    // Save user to database (password will be hashed automatically by pre-save hook)
-    const result = await userData.save();
     
     // Create JWT token
     const token = jwt.sign(
       { 
-        userId: result._id.toString(),
-        email: userData.email,
-        role: userData.role
+        userId: result.id,
+        email: result.email,
+        role: result.role
       },
       process.env.JWT_SECRET || 'fallback-secret-key',
       { expiresIn: '7d' }

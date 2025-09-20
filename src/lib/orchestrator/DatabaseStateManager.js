@@ -1,4 +1,3 @@
-import { connectDB } from '../../../lib/mongodb';
 import ChatSessionNew from '../../../models/ChatSessionNew';
 import { ChatMessage } from '../../../models/ChatMessage';
 import { UserStats } from '../../../models/UserStats';
@@ -24,17 +23,13 @@ export class DatabaseStateManager {
     }
 
     try {
-      await connectDB();
-      
       // Fetch session and messages from database
       const session = await ChatSessionNew.findById(sessionId);
       if (!session) {
         return null;
       }
 
-      const messages = await ChatMessage.find({ sessionId })
-        .sort({ createdAt: 1 })
-        .limit(100); // Limit to last 100 messages for performance
+      const messages = await ChatMessage.getSessionMessages(sessionId, 100, 0);
 
       // Fetch user profile
       const user = await User.findById(session.userId);
@@ -43,7 +38,7 @@ export class DatabaseStateManager {
       // Build tutoring context
       const context = {
         sessionId,
-        userId: session.userId.toString(),
+        userId: session.userId,
         subject: session.subject,
         language: 'en', // Default, could be from user preferences
         currentSection: undefined, // Will be determined from messages
@@ -66,23 +61,19 @@ export class DatabaseStateManager {
 
   async createSession(userId, subject = 'general') {
     try {
-      await connectDB();
-      
-      const session = new ChatSessionNew({
+      const session = await ChatSessionNew.create({
         userId,
         subject,
         title: `Chat - ${new Date().toLocaleDateString()}`,
         messageCount: 0,
-        createdAt: new Date(),
-        lastActive: new Date()
+        createdAt: new Date().toISOString(),
+        lastActive: new Date().toISOString()
       });
-
-      const savedSession = await session.save();
       
       // Initialize user stats if not exists
       await this.ensureUserStats(userId);
       
-      return savedSession._id.toString();
+      return session.id;
     } catch (error) {
       console.error('Error creating session:', error);
       throw error;
@@ -91,11 +82,9 @@ export class DatabaseStateManager {
 
   async updateState(sessionId, updates) {
     try {
-      await connectDB();
-      
       // Update session
-      await ChatSessionNew.findByIdAndUpdate(sessionId, {
-        lastActive: new Date(),
+      await ChatSessionNew.updateById(sessionId, {
+        lastActive: new Date().toISOString(),
         ...updates
       });
 
@@ -111,13 +100,9 @@ export class DatabaseStateManager {
 
   async getMessages(sessionId, limit = 50) {
     try {
-      await connectDB();
-      
-      const messages = await ChatMessage.find({ sessionId })
-        .sort({ createdAt: -1 })
-        .limit(limit);
+      const messages = await ChatMessage.getSessionMessages(sessionId, limit, 0);
 
-      return messages.map(msg => this.mapMessageToContext(msg)).reverse();
+      return messages.map(msg => this.mapMessageToContext(msg));
     } catch (error) {
       console.error('Error getting messages:', error);
       return [];
@@ -126,25 +111,21 @@ export class DatabaseStateManager {
 
   async addMessage(messageData) {
     try {
-      await connectDB();
-      
-      const message = new ChatMessage({
+      const message = await ChatMessage.create({
         sessionId: messageData.sessionId,
         userId: messageData.userId,
         sender: messageData.sender,
         messageType: messageData.messageType,
         content: messageData.content,
         imageUrl: messageData.imageUrl,
-        createdAt: new Date()
+        createdAt: new Date().toISOString()
       });
-
-      const savedMessage = await message.save();
 
       // Update session message count
-      await ChatSessionNew.findByIdAndUpdate(messageData.sessionId, {
-        $inc: { messageCount: 1 },
-        lastActive: new Date()
-      });
+      const session = await ChatSessionNew.findById(messageData.sessionId);
+      if (session) {
+        await session.addMessage(message.id);
+      }
 
       // Update user stats
       await this.updateMessageStats(messageData.userId, messageData.messageType);
@@ -153,14 +134,14 @@ export class DatabaseStateManager {
       this.invalidateCache(messageData.sessionId);
 
       return {
-        id: savedMessage._id.toString(),
+        id: message.id,
         sessionId: messageData.sessionId,
         userId: messageData.userId,
         sender: messageData.sender,
         type: messageData.messageType,
         content: messageData.content,
         imageUrl: messageData.imageUrl,
-        timestamp: savedMessage.createdAt
+        timestamp: message.createdAt
       };
     } catch (error) {
       console.error('Error adding message:', error);
@@ -170,13 +151,11 @@ export class DatabaseStateManager {
 
   async expireSession(sessionId) {
     try {
-      await connectDB();
-      
       // Update session status
-      await ChatSessionNew.findByIdAndUpdate(sessionId, {
-        status: 'archived',
-        lastActive: new Date()
-      });
+      const session = await ChatSessionNew.findById(sessionId);
+      if (session) {
+        await session.archive();
+      }
 
       // Clear cache
       this.invalidateCache(sessionId);
@@ -219,7 +198,7 @@ export class DatabaseStateManager {
   // Helper methods
   mapUserToProfile(user) {
     return {
-      id: user._id.toString(),
+      id: user.id,
       name: user.name,
       email: user.email,
       role: user.role,
@@ -231,7 +210,7 @@ export class DatabaseStateManager {
 
   mapMessageToContext(message) {
     return {
-      id: message._id.toString(),
+      id: message.id,
       sessionId: message.sessionId,
       userId: message.userId,
       sender: message.sender,
@@ -244,9 +223,9 @@ export class DatabaseStateManager {
 
   async ensureUserStats(userId) {
     try {
-      const existingStats = await UserStats.findOne({ userId });
+      const existingStats = await UserStats.findByUserId(userId);
       if (!existingStats) {
-        const stats = new UserStats({
+        await UserStats.create({
           userId,
           totalSessions: 0,
           totalMessages: 0,
@@ -254,11 +233,8 @@ export class DatabaseStateManager {
           totalVoiceMessages: 0,
           totalImageMessages: 0,
           totalTokensUsed: 0,
-          lastActive: new Date(),
-          createdAt: new Date(),
-          updatedAt: new Date()
+          lastActive: new Date().toISOString()
         });
-        await stats.save();
       }
     } catch (error) {
       console.error('Error ensuring user stats:', error);
@@ -267,28 +243,12 @@ export class DatabaseStateManager {
 
   async updateMessageStats(userId, messageType) {
     try {
-      const updateFields = {
-        $inc: { totalMessages: 1 },
-        $set: { lastActive: new Date(), updatedAt: new Date() }
-      };
-
-      switch (messageType) {
-        case 'text':
-          updateFields.$inc.totalTextMessages = 1;
-          break;
-        case 'voice':
-          updateFields.$inc.totalVoiceMessages = 1;
-          break;
-        case 'image':
-          updateFields.$inc.totalImageMessages = 1;
-          break;
+      let userStats = await UserStats.findByUserId(userId);
+      if (!userStats) {
+        userStats = await UserStats.create({ userId });
       }
 
-      await UserStats.findOneAndUpdate(
-        { userId },
-        updateFields,
-        { upsert: true }
-      );
+      await userStats.incrementMessages(messageType);
     } catch (error) {
       console.error('Error updating message stats:', error);
     }
@@ -314,7 +274,8 @@ export class DatabaseStateManager {
   // Health check method
   async healthCheck() {
     try {
-      await connectDB();
+      // Test database connection by trying to list users
+      await User.count();
       return { status: 'healthy', cacheSize: this.cache.size };
     } catch (error) {
       return { status: 'unhealthy', error: error.message };

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { openaiService } from '../../../lib/openaiService';
-import { connectDB } from '../../../../lib/mongodb';
 import ChatSessionNew from '../../../../models/ChatSessionNew';
 import { ChatMessage } from '../../../../models/ChatMessage';
 import { UserStats } from '../../../../models/UserStats';
@@ -44,15 +43,13 @@ export async function POST(request) {
       );
     }
 
-    await connectDB();
-
     // Verify user if userId is provided
     let user = null;
     if (userId) {
       try {
         user = await User.findById(userId);
         if (!user) {
-          user = await User.findOne({ email: userId });
+          user = await User.findByEmail(userId);
         }
       } catch (error) {
         console.log('User verification failed, continuing as guest:', error.message);
@@ -69,38 +66,26 @@ export async function POST(request) {
     }
 
     // Create user message
-    const userMessage = new ChatMessage({
-      sessionId: session._id,
+    const userMessage = await ChatMessage.create({
+      sessionId: session.id,
       userId: userId || 'anonymous',
       sender: 'user',
       messageType: messageType || 'text',
       content: message || 'Image uploaded',
       imageUrl: imageUrl || null,
-      timestamp: new Date()
+      createdAt: new Date().toISOString()
     });
 
-    await userMessage.save();
-
     // Update session
-    session.messageCount += 1;
-    session.lastActive = new Date();
-    await session.save();
+    await session.addMessage(userMessage.id);
 
     // Update user stats
     if (userId) {
-      await UserStats.findOneAndUpdate(
-        { userId: userId },
-        {
-          $inc: {
-            totalMessages: 1,
-            totalTextMessages: messageType === 'text' ? 1 : 0,
-            totalVoiceMessages: messageType === 'voice' ? 1 : 0,
-            totalImageMessages: messageType === 'image' ? 1 : 0
-          },
-          $set: { lastActivity: new Date() }
-        },
-        { upsert: true }
-      );
+      let userStats = await UserStats.findByUserId(userId);
+      if (!userStats) {
+        userStats = await UserStats.create({ userId });
+      }
+      await userStats.incrementMessages(messageType);
     }
 
     // Generate AI response
@@ -123,56 +108,48 @@ export async function POST(request) {
     }
 
     // Create AI message
-    const aiMessage = new ChatMessage({
-      sessionId: session._id,
+    const aiMessage = await ChatMessage.create({
+      sessionId: session.id,
       userId: userId || 'anonymous',
       sender: 'ai',
       messageType: 'text',
       content: aiResponse.content,
-      timestamp: new Date(),
-      metadata: {
-        tokenUsage: aiResponse.tokenUsage || 0,
-        model: aiResponse.model || 'gpt-4o',
-        responseTime: aiResponse.responseTime || 0
-      }
+      tokensUsed: aiResponse.tokenUsage || 0,
+      model: aiResponse.model || 'gpt-4o',
+      createdAt: new Date().toISOString()
     });
 
-    await aiMessage.save();
-
     // Update session again
-    session.messageCount += 1;
-    session.lastActive = new Date();
-    await session.save();
+    await session.addMessage(aiMessage.id);
 
     // Update user stats for AI response
     if (userId) {
-      await UserStats.findOneAndUpdate(
-        { userId: userId },
-        {
-          $inc: { totalMessages: 1, totalTextMessages: 1 },
-          $set: { lastActivity: new Date() }
-        },
-        { upsert: true }
-      );
+      let userStats = await UserStats.findByUserId(userId);
+      if (!userStats) {
+        userStats = await UserStats.create({ userId });
+      }
+      await userStats.incrementMessages('text');
+      await userStats.addTokens(aiResponse.tokenUsage || 0);
     }
 
     return NextResponse.json({
       success: true,
       userMessage: {
-        id: userMessage._id,
+        id: userMessage.id,
         content: userMessage.content,
         messageType: userMessage.messageType,
         imageUrl: userMessage.imageUrl,
-        timestamp: userMessage.timestamp
+        timestamp: userMessage.createdAt
       },
       aiMessage: {
-        id: aiMessage._id,
+        id: aiMessage.id,
         content: aiMessage.content,
         messageType: aiMessage.messageType,
-        timestamp: aiMessage.timestamp,
-        metadata: aiMessage.metadata
+        timestamp: aiMessage.createdAt,
+        tokensUsed: aiMessage.tokensUsed,
+        model: aiMessage.model
       },
-      sessionId: session._id
+      sessionId: session.id
     });
 
   } catch (error) {
