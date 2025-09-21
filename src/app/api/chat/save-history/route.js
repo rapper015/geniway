@@ -19,7 +19,7 @@ export async function POST(request) {
     const token = authHeader.split(' ')[1];
     
     // Verify JWT token
-    let decoded;
+     let decoded; 
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
     } catch (error) {
