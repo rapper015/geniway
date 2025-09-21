@@ -9,7 +9,9 @@ const orchestrator = new SimpleOrchestrator();
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { sessionId, message, messageType = 'text', imageUrl, userId, guestProfile } = body;
+    const { sessionId, message, messageType = 'text', imageUrl, userId, guestProfile, language } = body;
+    
+    console.log('[API /solve] Received language:', language);
 
     if (!sessionId || !message) {
       return NextResponse.json(
@@ -49,6 +51,7 @@ export async function POST(request) {
             timestamp: new Date(),
             userId: userId || 'anonymous', // Use actual user ID from request
             guestProfile: guestProfile || undefined, // Include guest profile data
+            language: language || 'english', // Pass language preference
             subject: 'general'
           };
 
@@ -130,6 +133,9 @@ export async function POST(request) {
     const messageType = searchParams.get('type') || 'text';
     const imageUrl = searchParams.get('imageUrl');
     const userId = searchParams.get('userId');
+    const language = searchParams.get('language');
+    
+    console.log('[API /solve GET] Received language:', language);
 
     if (!sessionId || !message) {
       return NextResponse.json(
@@ -168,6 +174,7 @@ export async function POST(request) {
               imageUrl: imageUrl || undefined,
               timestamp: new Date(),
               userId: userId || 'anonymous',
+              language: language || 'english', // Pass language preference
               subject: 'general'
             };
 

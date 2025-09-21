@@ -425,13 +425,34 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
       // Use guest profile data if user profile not found in database
       const profileData = userProfile || studentInput.guestProfile || {};
       console.log('[SimpleOrchestrator] Using profile data:', profileData ? 'Yes' : 'No');
+      console.log('[SimpleOrchestrator] Student input language:', studentInput.language);
 
       // Build personalized curriculum context
+      // Map language from studentInput to the format expected by the AI
+      const mapLanguage = (lang) => {
+        console.log('[SimpleOrchestrator] Mapping language:', lang);
+        switch (lang) {
+          case 'hindi':
+          case 'हिंदी':
+            console.log('[SimpleOrchestrator] Mapped hindi/हिंदी to hi');
+            return 'hi';
+          case 'hinglish':
+          case 'हिंग्लिश':
+            console.log('[SimpleOrchestrator] Mapped hinglish/हिंग्लिश to hinglish');
+            return 'hinglish';
+          case 'english':
+          case 'अंग्रेजी':
+          default:
+            console.log('[SimpleOrchestrator] Mapped to en (default)');
+            return 'en';
+        }
+      };
+
       const curriculumContext = {
         subject: session.subject || 'general',
         class: profileData?.grade?.toString() || '10',
         board: profileData?.board || 'CBSE',
-        language: profileData?.langPref || 'en',
+        language: mapLanguage(studentInput.language) || profileData?.langPref || 'en',
         learningStyle: profileData?.learningStyle || 'Text',
         pace: profileData?.pace || 'Normal',
         state: profileData?.state || '',
@@ -439,6 +460,8 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
         role: profileData?.role || 'student',
         ageBand: profileData?.ageBand || '11-14'
       };
+
+      console.log('[SimpleOrchestrator] Final curriculum context language:', curriculumContext.language);
 
       return {
         sessionId: session._id.toString(),
@@ -686,7 +709,7 @@ The student has uploaded an image. Please analyze the image carefully and provid
     // Build personalized context
     const personalizedContext = this.buildPersonalizedContext(curriculumContext);
 
-    return `You are Geni Ma'am, a warm Indian tutor. Generate a Big Idea section per US-3.5 scaffolding framework.
+    const prompt = `You are Geni Ma'am, a warm Indian tutor. Generate a Big Idea section per US-3.5 scaffolding framework.
 
 ${conversationContext}
 
@@ -703,6 +726,15 @@ ${personalizedContext}
 Subject: ${curriculumContext.subject} | Language: ${curriculumContext.language === 'hi' ? 'Hindi' : curriculumContext.language === 'hinglish' ? 'Hinglish' : 'English'}
 Topic: ${curriculumContext.subject} | Original: "${input}"${imageContext}
 
+**LANGUAGE INSTRUCTIONS:**
+${(() => {
+  const instruction = curriculumContext.language === 'hi' ? 'IMPORTANT: Respond entirely in Hindi (हिंदी). Use Devanagari script for all text.' : 
+    curriculumContext.language === 'hinglish' ? 'IMPORTANT: Respond in Hinglish (mix of Hindi and English). Use both Devanagari script and English as appropriate.' : 
+    'IMPORTANT: Respond in English.';
+  console.log('[SimpleOrchestrator] Language instruction (Big Idea):', instruction);
+  return instruction;
+})()}
+
 **INDIAN CONTEXT REQUIREMENTS:**
 - Use Indian names (like Priya, Arjun, Sita, Raj, etc.) in examples
 - Reference Indian places (like Delhi, Mumbai, Bangalore, Chennai, etc.)
@@ -716,6 +748,11 @@ Provide clear, concise explanation of the core concept in exactly 120 words or f
 2. Why it matters
 3. One concrete real-world relevant example with Indian context
 4. Connection to student's question${imageUrl ? ' and the uploaded image' : ''}`;
+
+    console.log('[SimpleOrchestrator] Generated prompt for language:', curriculumContext.language);
+    console.log('[SimpleOrchestrator] Prompt preview:', prompt.substring(0, 500) + '...');
+    
+    return prompt;
   }
 
   buildExamplePrompt(input, imageUrl, curriculumContext, messageHistory) {
@@ -737,7 +774,7 @@ The student has uploaded an image. Please analyze the image and provide step-by-
     // Build personalized context
     const personalizedContext = this.buildPersonalizedContext(curriculumContext);
 
-    return `You are Geni Ma'am. Here's the complete conversation context:
+    const prompt = `You are Geni Ma'am. Here's the complete conversation context:
 
 ${conversationContext}
 
@@ -751,6 +788,15 @@ Subject: ${curriculumContext.subject} (Class ${curriculumContext.class})
 Topic: ${curriculumContext.subject}
 Board: ${curriculumContext.board}
 Language: ${curriculumContext.language === 'hi' ? 'Hindi' : curriculumContext.language === 'hinglish' ? 'Hinglish' : 'English'}
+
+**LANGUAGE INSTRUCTIONS:**
+${(() => {
+  const instruction = curriculumContext.language === 'hi' ? 'IMPORTANT: Respond entirely in Hindi (हिंदी). Use Devanagari script for all text.' : 
+    curriculumContext.language === 'hinglish' ? 'IMPORTANT: Respond in Hinglish (mix of Hindi and English). Use both Devanagari script and English as appropriate.' : 
+    'IMPORTANT: Respond in English.';
+  console.log('[SimpleOrchestrator] Language instruction (Example):', instruction);
+  return instruction;
+})()}
 
 **INDIAN CONTEXT REQUIREMENTS:**
 - Use Indian names (like Priya, Arjun, Sita, Raj, etc.) in examples
@@ -774,6 +820,11 @@ Step 3: [Specific action] - [Clear reason and explanation with Indian context]
 ${isDetailedStepsRequest ? 'Step 4: [Additional detail] - [Further explanation with Indian context]\nStep 5: [Final step] - [Summary and verification with Indian context]' : ''}
 
 Focus specifically on the original topic: "${input}"${imageUrl ? ' and the uploaded image' : ''}`;
+
+    console.log('[SimpleOrchestrator] Generated example prompt for language:', curriculumContext.language);
+    console.log('[SimpleOrchestrator] Example prompt preview:', prompt.substring(0, 500) + '...');
+    
+    return prompt;
   }
 
   buildQuickCheckPrompt(input, imageUrl, curriculumContext) {

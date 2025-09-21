@@ -56,7 +56,7 @@ export default function ChatShell({ subject, onBack }) {
           pace: finalProfile.pace || 'Normal',
           state: finalProfile.state || '',
           city: finalProfile.city || '',
-          teachingLanguage: 'English',
+          teachingLanguage: language || 'English',
           contentMode: 'step-by-step',
           fastTrackEnabled: false,
           saveChatHistory: true,
@@ -1189,6 +1189,8 @@ export default function ChatShell({ subject, onBack }) {
       console.log('[ChatShell] Making solve request with:', { userInput, sessionId, imageUrl });
 
       // Use POST request with body data instead of GET with query params
+      console.log('[ChatShell] Sending request with language:', language);
+      
       const requestBody = {
         message: userInput,
         sessionId: sessionId,

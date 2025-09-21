@@ -18,17 +18,40 @@ export const LanguageProvider = ({ children }) => {
   // Load language from localStorage on mount
   useEffect(() => {
     const savedLanguage = localStorage.getItem('geniway_language');
-    if (savedLanguage && ['english', 'hindi', 'hinglish'].includes(savedLanguage)) {
-      setLanguage(savedLanguage);
+    console.log('[LanguageContext] Loading saved language from localStorage:', savedLanguage);
+    const validLanguages = ['english', 'hindi', 'hinglish', 'हिंदी', 'हिंग्लिश', 'अंग्रेजी'];
+    if (savedLanguage && validLanguages.includes(savedLanguage)) {
+      // Normalize to English script for internal use
+      let normalizedLanguage = savedLanguage;
+      if (savedLanguage === 'हिंदी') normalizedLanguage = 'hindi';
+      if (savedLanguage === 'हिंग्लिश') normalizedLanguage = 'hinglish';
+      if (savedLanguage === 'अंग्रेजी') normalizedLanguage = 'english';
+      
+      setLanguage(normalizedLanguage);
+      console.log('[LanguageContext] Set language to:', normalizedLanguage);
+    } else {
+      console.log('[LanguageContext] No valid saved language, using default: english');
     }
   }, []);
 
   // Save language to localStorage when it changes
   const changeLanguage = (newLanguage) => {
-    if (['english', 'hindi', 'hinglish'].includes(newLanguage)) {
-      setLanguage(newLanguage);
-      localStorage.setItem('geniway_language', newLanguage);
-      console.log('[LanguageContext] Language changed to:', newLanguage);
+    console.log('[LanguageContext] changeLanguage called with:', newLanguage);
+    // Support both English and Hindi script language names
+    const validLanguages = ['english', 'hindi', 'hinglish', 'हिंदी', 'हिंग्लिश', 'अंग्रेजी'];
+    if (validLanguages.includes(newLanguage)) {
+      // Normalize to English script for internal use
+      let normalizedLanguage = newLanguage;
+      if (newLanguage === 'हिंदी') normalizedLanguage = 'hindi';
+      if (newLanguage === 'हिंग्लिश') normalizedLanguage = 'hinglish';
+      if (newLanguage === 'अंग्रेजी') normalizedLanguage = 'english';
+      
+      setLanguage(normalizedLanguage);
+      localStorage.setItem('geniway_language', normalizedLanguage);
+      console.log('[LanguageContext] Language changed to:', normalizedLanguage);
+      console.log('[LanguageContext] Language saved to localStorage as:', localStorage.getItem('geniway_language'));
+    } else {
+      console.log('[LanguageContext] Invalid language:', newLanguage);
     }
   };
 
