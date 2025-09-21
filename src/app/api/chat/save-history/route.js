@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { connectDB } from '../../../../../lib/mongodb';
-import { ChatSession } from '../../../../../models/ChatSession';
 import { ChatMessage } from '../../../../../models/ChatMessage';
 import jwt from 'jsonwebtoken';
 
