@@ -42,7 +42,8 @@ export class SimpleOrchestrator {
       QUICK_CHECK: 'quick_check',
       TRY_IT: 'try_it',
       RECAP: 'recap',
-      MCQ_VALIDATION: 'mcq_validation'
+      MCQ_VALIDATION: 'mcq_validation',
+      ALTERNATIVE_EXPLANATION: 'alternative_explanation'
     };
   }
 
@@ -506,10 +507,15 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
       return this.sectionTypes.BIG_IDEA;
     }
     
-    // Check for specific requests
-    if (this.isExampleRequest(latestInput)) {
-      console.log('[SimpleOrchestrator] Detected example request');
-      return this.sectionTypes.EXAMPLE;
+    // Check for specific requests (order matters - more specific first)
+    if (this.isNotClearRequest(latestInput)) {
+      console.log('[SimpleOrchestrator] Detected not clear request');
+      return this.sectionTypes.ALTERNATIVE_EXPLANATION;
+    }
+    
+    if (this.isHintRequest(latestInput)) {
+      console.log('[SimpleOrchestrator] Detected hint request');
+      return this.sectionTypes.TRY_IT;
     }
     
     if (this.isStepsRequest(latestInput)) {
@@ -517,9 +523,9 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
       return this.sectionTypes.EXAMPLE;
     }
     
-    if (this.isHintRequest(latestInput)) {
-      console.log('[SimpleOrchestrator] Detected hint request');
-      return this.sectionTypes.TRY_IT;
+    if (this.isExampleRequest(latestInput)) {
+      console.log('[SimpleOrchestrator] Detected example request');
+      return this.sectionTypes.EXAMPLE;
     }
     
     // Default to Big Idea for new concepts
@@ -541,14 +547,20 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
   }
 
   isStepsRequest(input) {
-    const result = /^(steps|step by step|detailed steps|show steps|show detailed steps|how to|process|procedure|break it down|explain step by step|walk me through)/i.test(input);
+    const result = /^(steps|step by step|detailed steps|show steps|show detailed steps|how to|process|procedure|break it down|explain step by step|walk me through|numbered steps|step 1|step 2|step 3|please show detailed steps)/i.test(input);
     console.log('[SimpleOrchestrator] isStepsRequest check:', { input, result });
     return result;
   }
 
   isHintRequest(input) {
-    const result = /^(hint|help|not clear|confused|don't understand)/i.test(input);
+    const result = /^(hint|help|can you give me a hint|give me a hint)/i.test(input);
     console.log('[SimpleOrchestrator] isHintRequest check:', { input, result });
+    return result;
+  }
+
+  isNotClearRequest(input) {
+    const result = /^(not clear|confused|don't understand|can you explain this differently)/i.test(input);
+    console.log('[SimpleOrchestrator] isNotClearRequest check:', { input, result });
     return result;
   }
 
@@ -636,13 +648,16 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
         return this.buildQuickCheckPrompt(currentInput, currentImageUrl, curriculumContext);
       
       case this.sectionTypes.TRY_IT:
-        return this.buildTryItPrompt(currentInput, currentImageUrl, curriculumContext);
+        return this.buildTryItPrompt(currentInput, currentImageUrl, curriculumContext, messageHistory);
       
       case this.sectionTypes.RECAP:
         return this.buildRecapPrompt(currentInput, currentImageUrl, curriculumContext, messageHistory);
       
       case this.sectionTypes.MCQ_VALIDATION:
         return this.buildMCQValidationPrompt(currentInput, currentImageUrl, curriculumContext, messageHistory);
+      
+      case this.sectionTypes.ALTERNATIVE_EXPLANATION:
+        return this.buildAlternativeExplanationPrompt(currentInput, currentImageUrl, curriculumContext, messageHistory);
       
       default:
         return this.buildBigIdeaPrompt(currentInput, currentImageUrl, curriculumContext, messageHistory);
@@ -778,7 +793,13 @@ The student has uploaded an image. Please analyze the image and provide step-by-
 
 ${conversationContext}
 
-EXAMPLE SECTION (3-5 numbered steps): Provide a ${isDetailedStepsRequest ? 'detailed, comprehensive' : 'clear'} step-by-step example based on the complete conversation history.${imageContext}
+EXAMPLE SECTION (3-5 numbered steps): Provide a ${isDetailedStepsRequest ? 'detailed, comprehensive' : 'clear'} step-by-step example based on the complete conversation history. 
+
+**IMPORTANT FOR STEPS REQUESTS:**
+- Use clear numbered format: Step 1:, Step 2:, Step 3:, etc.
+- Each step should be specific and actionable
+- Build upon the previous step logically
+- Make each step easy to follow and understand${imageContext}
 
 **PERSONALIZED CONTEXT:**
 ${personalizedContext}
@@ -858,7 +879,11 @@ Correct Answer: [A/B/C/D]
 Explanation: [Brief explanation of why the correct answer is right]`;
   }
 
-  buildTryItPrompt(input, imageUrl, curriculumContext) {
+  buildTryItPrompt(input, imageUrl, curriculumContext, messageHistory) {
+    const conversationContext = messageHistory.length > 0 
+      ? `Previous conversation: ${messageHistory.slice(-3).map(m => `${m.sender}: ${m.content}`).join('\n')}`
+      : '';
+
     const imageContext = imageUrl 
       ? `\n\n**IMAGE ANALYSIS REQUIRED:**
 The student has uploaded an image. Please provide hints and guidance based on the content visible in the image. Focus on:
@@ -867,22 +892,48 @@ The student has uploaded an image. Please provide hints and guidance based on th
 - Guide them through the problem or concept shown in the image`
       : '';
 
-    return `You are Geni Ma'am, a warm Indian tutor. Generate a Try It section per US-3.5 scaffolding framework.${imageContext}
+    // Build personalized context
+    const personalizedContext = this.buildPersonalizedContext(curriculumContext);
 
-ORIGINAL STUDENT QUESTION: "${input}"
-Subject: ${curriculumContext.subject} | Class: ${curriculumContext.class}
+    return `You are Geni Ma'am, a warm Indian tutor providing hints and examples to help the student understand the concept.
 
-**US-3.5 TRY IT REQUIREMENTS:**
-- PEDAGOGICAL PURPOSE: Give student chance to practice the concept independently
-- GUIDANCE LEVEL: Provide encouragement but let them think for themselves
-- FORMAT: Clear practice prompt with supportive tone
-- TOPIC FOCUS: Must be directly related to "${input}"${imageUrl ? ' and the uploaded image' : ''} - not a different topic
+${conversationContext}
+
+**HINT AND EXAMPLE REQUIREMENTS:**
+- PEDAGOGICAL PURPOSE: Provide helpful hints and proper examples to help the student understand the concept from the conversation
+- GUIDANCE LEVEL: Give clear examples and explanations that guide understanding without giving away the complete answer
+- FORMAT: Focus on providing hints and examples that help the student grasp the concept
+- TOPIC FOCUS: Must be directly related to the original question from the conversation${imageUrl ? ' and the uploaded image' : ''} - not a different topic
+
+**PERSONALIZED CONTEXT:**
+${personalizedContext}
+
+Context Details:
+Subject: ${curriculumContext.subject} (Class ${curriculumContext.class}) 
+Topic: ${curriculumContext.subject}
+Board: ${curriculumContext.board}
+Language: ${curriculumContext.language === 'hi' ? 'Hindi' : curriculumContext.language === 'hinglish' ? 'Hinglish' : 'English'}
+
+**LANGUAGE INSTRUCTIONS:**
+${curriculumContext.language === 'hi' ? 'IMPORTANT: Respond entirely in Hindi (हिंदी). Use Devanagari script for all text.' : 
+  curriculumContext.language === 'hinglish' ? 'IMPORTANT: Respond in Hinglish (mix of Hindi and English). Use both Devanagari script and English as appropriate.' : 
+  'IMPORTANT: Respond in English.'}
+
+**INDIAN CONTEXT REQUIREMENTS:**
+- Use Indian names (like Priya, Arjun, Sita, Raj, etc.) in examples
+- Reference Indian places (like Delhi, Mumbai, Bangalore, Chennai, etc.)
+- Use Indian cultural references and examples
+- Make examples relevant to Indian students' experiences
+- Use Indian currency (₹), measurements, and contexts${imageContext}
 
 **OUTPUT FORMAT:**
-Provide encouraging practice prompt about "${input}"${imageUrl ? ' and the content in the image' : ''} that motivates the student to try applying this specific concept.
-Keep it concise and supportive.
+Provide helpful hints and examples that guide the student's understanding of the concept from the conversation.
+Include:
+1. A helpful hint that points them in the right direction
+2. A clear example that illustrates the concept
+3. Encouraging guidance that builds their confidence
 
-Focus on building confidence and independent application of "${input}"${imageUrl ? ' based on what they see in the image' : ''}.`;
+Focus on helping them understand the concept through hints and examples rather than giving them a practice problem.`;
   }
 
   buildRecapPrompt(input, imageUrl, curriculumContext, messageHistory) {
@@ -953,6 +1004,67 @@ You have the complete question context above - determine the correct answer base
 Be warm, supportive, and educational. Keep response concise but informative.`;
   }
 
+  buildAlternativeExplanationPrompt(input, imageUrl, curriculumContext, messageHistory) {
+    const conversationContext = messageHistory.length > 0 
+      ? `Previous conversation: ${messageHistory.slice(-3).map(m => `${m.sender}: ${m.content}`).join('\n')}`
+      : '';
+
+    const imageContext = imageUrl 
+      ? `\n\n**IMAGE ANALYSIS REQUIRED:**
+The student has uploaded an image. Please provide an alternative explanation that considers the image content. Focus on:
+- What educational concepts are shown in the image
+- Provide a different perspective or approach to understanding the image content
+- Use the image as a visual aid in your alternative explanation`
+      : '';
+
+    // Build personalized context
+    const personalizedContext = this.buildPersonalizedContext(curriculumContext);
+
+    return `You are Geni Ma'am providing an alternative explanation because the student found the previous explanation unclear.
+
+${conversationContext}
+
+**ALTERNATIVE EXPLANATION REQUIREMENTS:**
+- Provide a COMPLETELY DIFFERENT approach to explaining the same concept
+- Use different analogies, examples, or teaching methods than before
+- Make it longer and more detailed than the previous explanation
+- Include multiple examples to illustrate the concept
+- Use simpler language and break down complex ideas further
+- Connect to the student's prior knowledge and experiences
+- Focus on explaining in a different way with longer explanations and examples
+
+**PERSONALIZED CONTEXT:**
+${personalizedContext}
+
+Context Details:
+Subject: ${curriculumContext.subject} (Class ${curriculumContext.class}) 
+Topic: ${curriculumContext.subject}
+Board: ${curriculumContext.board}
+Language: ${curriculumContext.language === 'hi' ? 'Hindi' : curriculumContext.language === 'hinglish' ? 'Hinglish' : 'English'}
+
+**LANGUAGE INSTRUCTIONS:**
+${curriculumContext.language === 'hi' ? 'IMPORTANT: Respond entirely in Hindi (हिंदी). Use Devanagari script for all text.' : 
+  curriculumContext.language === 'hinglish' ? 'IMPORTANT: Respond in Hinglish (mix of Hindi and English). Use both Devanagari script and English as appropriate.' : 
+  'IMPORTANT: Respond in English.'}
+
+**INDIAN CONTEXT REQUIREMENTS:**
+- Use Indian names (like Priya, Arjun, Sita, Raj, etc.) in examples
+- Reference Indian places (like Delhi, Mumbai, Bangalore, Chennai, etc.)
+- Use Indian cultural references and examples
+- Make examples relevant to Indian students' experiences
+- Use Indian currency (₹), measurements, and contexts
+
+**ALTERNATIVE EXPLANATION FORMAT:**
+1. Start with a different analogy or real-world connection
+2. Break down the concept into smaller, simpler parts
+3. Provide 2-3 different examples to illustrate the same concept
+4. Use visual descriptions or step-by-step breakdowns
+5. Connect to everyday experiences the student can relate to
+6. End with a summary that reinforces the main concept
+
+Focus on making the explanation as clear and accessible as possible using a completely different approach than what was used before.${imageUrl ? ' Consider the uploaded image in your alternative explanation.' : ''}`;
+  }
+
   // Get section title with emojis
   getSectionTitle(sectionType) {
     const titles = {
@@ -961,7 +1073,8 @@ Be warm, supportive, and educational. Keep response concise but informative.`;
       [this.sectionTypes.QUICK_CHECK]: '❓ Quick Check',
       [this.sectionTypes.TRY_IT]: '🎯 Try It Yourself',
       [this.sectionTypes.RECAP]: '📌 Recap',
-      [this.sectionTypes.MCQ_VALIDATION]: '✅ Answer Review'
+      [this.sectionTypes.MCQ_VALIDATION]: '✅ Answer Review',
+      [this.sectionTypes.ALTERNATIVE_EXPLANATION]: '🔄 Alternative Explanation'
     };
     return titles[sectionType] || '💬 Response';
   }
@@ -974,7 +1087,8 @@ Be warm, supportive, and educational. Keep response concise but informative.`;
       [this.sectionTypes.QUICK_CHECK]: 300,
       [this.sectionTypes.TRY_IT]: 200,
       [this.sectionTypes.RECAP]: 100,
-      [this.sectionTypes.MCQ_VALIDATION]: 150
+      [this.sectionTypes.MCQ_VALIDATION]: 150,
+      [this.sectionTypes.ALTERNATIVE_EXPLANATION]: 500
     };
     return tokenLimits[sectionType] || 300;
   }

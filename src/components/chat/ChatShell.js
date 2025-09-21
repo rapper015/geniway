@@ -18,6 +18,7 @@ import { DEFAULT_QUICK_REPLIES } from './QuickRepliesBar';
 import SettingsModal from './SettingsModal';
 import { ProfileCollectionWrapper } from '../ProfileCollectionWrapper';
 import { StepWiseProfileWrapper } from '../StepWiseProfileWrapper';
+import { gtmEvents } from '../../lib/gtm';
 
 export default function ChatShell({ subject, onBack }) {
   const { user, isAuthenticated, isGuest, guestUser } = useAuth();
@@ -505,6 +506,9 @@ export default function ChatShell({ subject, onBack }) {
     console.log('[ChatShell] handleSendMessage called:', { text, type, currentSessionId });
     console.log('[ChatShell] Function called with params:', { text, type, metadata });
 
+    // Track chat message sent event
+    gtmEvents.chatMessageSent(type, currentSessionId, userId);
+
     // Handle quiz responses (only if we're actively in quiz mode)
     if (waitingForQuizResponse && quizStep && quizStep !== null) {
       console.log('[ChatShell] Quiz active, handling response:', { text, quizStep, waitingForQuizResponse });
@@ -962,6 +966,9 @@ export default function ChatShell({ subject, onBack }) {
       setWaitingForQuizResponse(false);
       setCurrentQuiz(null);
       setQuizCompletedForCurrentQuestion(true); // Mark quiz as completed for this question
+      
+      // Track quiz completion
+      gtmEvents.quizCompleted(currentQuiz?.id || 'unknown', score || 0, currentSessionId);
       
       // Check if we should ask for profile info based on gotItCount
       const existingProfile = JSON.parse(localStorage.getItem('guestProfile') || '{}');
@@ -1574,6 +1581,9 @@ export default function ChatShell({ subject, onBack }) {
   const handleQuickReplyClick = useCallback((action) => {
     console.log('Quick reply action:', action);
 
+    // Track button click event
+    gtmEvents.buttonClicked(action, 'quick_reply', currentSessionId);
+
     // Hide quick actions immediately when any option is clicked
     setHideQuickActions(true);
 
@@ -1748,8 +1758,8 @@ export default function ChatShell({ subject, onBack }) {
               <img src="/genimam.png" alt="" />
             </div>
             <div>
-              <h1 className="text-lg font-semibold text-white">GeniWay</h1>
-              {/* <p className="text-sm text-white/80">AI Doubt Solver</p> */}
+              <h1 className="text-lg font-semibold text-white">Geni Ma’am</h1>
+              <p className="text-sm text-white/80">AI Doubt Solver</p>
             </div>
           </div>
 

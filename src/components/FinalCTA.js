@@ -1,15 +1,20 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { gtmEvents } from '../lib/gtm';
 
 export default function FinalCTA() {
   const router = useRouter();
 
   const handleStartClick = () => {
+    // Track CTA button click
+    gtmEvents.buttonClicked('start_learning', 'final_cta');
     router.push('/chat');
   };
 
   const handleWhatsAppClick = () => {
+    // Track WhatsApp share event
+    gtmEvents.buttonClicked('whatsapp_share', 'final_cta');
     const message = `Hi! I found this amazing AI tutor for solving doubts - Geni Ma'am! 🎓
 
 She can help with:

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Modal from './ui/Modal';
+import { gtmEvents } from '../lib/gtm';
 
 // Individual step modals for profile collection
 export function NameStepModal({ isOpen, onClose, onSubmit, userData = {} }) {
@@ -13,6 +14,8 @@ export function NameStepModal({ isOpen, onClose, onSubmit, userData = {} }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (formData.firstName.trim()) {
+      // Track onboarding start
+      gtmEvents.userOnboardingStart(localStorage.getItem('currentSessionId'));
       onSubmit(formData);
       onClose();
     }
@@ -861,6 +864,10 @@ export function CompleteStepModal({ isOpen, onClose, onSubmit, userData = {} }) 
         } catch (chatError) {
           console.error('[CompleteStepModal] Error saving chat history:', chatError);
         }
+        
+        // Track successful account creation
+        gtmEvents.userOnboardingComplete(data.user._id, completeProfile.email, localStorage.getItem('currentSessionId'));
+        gtmEvents.profileCreated(data.user._id, completeProfile.email, localStorage.getItem('currentSessionId'));
         
         // Show success message
         alert(`Account created successfully! Welcome, ${completeProfile.firstName}! Your chat history has been saved.`);

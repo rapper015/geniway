@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect } from 'react';
+import { gtmEvents } from '../lib/gtm';
 
 const LanguageContext = createContext();
 
@@ -50,6 +51,9 @@ export const LanguageProvider = ({ children }) => {
       localStorage.setItem('geniway_language', normalizedLanguage);
       console.log('[LanguageContext] Language changed to:', normalizedLanguage);
       console.log('[LanguageContext] Language saved to localStorage as:', localStorage.getItem('geniway_language'));
+      
+      // Track language switch event
+      gtmEvents.languageSwitched(normalizedLanguage);
     } else {
       console.log('[LanguageContext] Invalid language:', newLanguage);
     }

@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '../contexts/LanguageContext';
+import { gtmEvents } from '../lib/gtm';
 
 export default function StickyBottomBar() {
   const router = useRouter();
@@ -12,6 +13,9 @@ export default function StickyBottomBar() {
   };
 
   const handleHindiClick = () => {
+    // Track button click
+    gtmEvents.buttonClicked('hindi_ask_button', 'sticky_bottom_bar');
+    
     // Set language to Hindi and navigate to chat
     changeLanguage('hindi');
     router.push('/chat');

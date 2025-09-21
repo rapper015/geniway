@@ -3,6 +3,7 @@ import "./globals.css";
 import { AuthProvider } from "../contexts/AuthContext";
 import { LanguageProvider } from "../contexts/LanguageContext";
 import { ProfileCollectionProvider } from "../contexts/ProfileCollectionContext";
+import GoogleAnalytics from "../components/GoogleAnalytics";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,6 +34,7 @@ export default function RootLayout({ children }) {
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <GoogleAnalytics />
         <AuthProvider>
           <LanguageProvider>
             <ProfileCollectionProvider>
