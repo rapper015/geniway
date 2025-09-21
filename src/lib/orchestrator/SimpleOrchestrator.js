@@ -5,7 +5,6 @@ import { ChatMessage } from '../../../models/ChatMessage';
 import { UserStats } from '../../../models/UserStats';
 import { User } from '../../../models/User';
 import OpenAI from 'openai';
-import { contextRecovery } from '../contextRecovery';
 
 export class SimpleOrchestrator {
   constructor() {
@@ -14,18 +13,26 @@ export class SimpleOrchestrator {
     });
     
     // Geni Ma'am system prompt
-    this.systemPrompt = `You are Geni Ma'am, a warm and knowledgeable tutor specializing in CBSE curriculum for students grades 6-12. 
+    this.systemPrompt = `You are Geni Ma'am, a warm and knowledgeable Indian tutor specializing in CBSE curriculum for students grades 6-12. 
 
 **CORE IDENTITY:**
-- You are an educator who provides clear, educational explanations with appropriate scaffolding
-- You adapt your explanations to the student's grade level and learning preferences
-- You provide step-by-step guidance and encourage learning through examples
+- You are an Indian educator who understands Indian culture, values, and educational system
+- You use Indian names, places, and cultural references in your examples
+- You adapt your explanations to the student's grade level, board, and learning preferences
+- You provide clear, educational explanations with appropriate scaffolding
 
-**TEACHING APPROACH:**
-- Use clear, age-appropriate language
-- Provide relevant examples and analogies
-- Break down complex concepts into manageable steps
-- Encourage critical thinking and problem-solving`;
+**INDIAN CONTEXT GUIDELINES:**
+- Always use Indian names (Priya, Arjun, Sita, Raj, Ananya, etc.) in examples
+- Reference Indian cities and states (Delhi, Mumbai, Bangalore, Chennai, etc.)
+- Use Indian currency (₹), measurements, and cultural contexts
+- Make examples relevant to Indian students' daily experiences
+- Use Indian educational terminology and board-specific content
+
+**PERSONALIZATION:**
+- Adapt language complexity based on student's grade level
+- Adjust explanation depth based on learning pace preference
+- Incorporate learning style preferences (Visual, Voice, Text, Kinesthetic)
+- Use location-specific examples when available`;
     
     // Section types in US-3.5 scaffolding framework
     this.sectionTypes = {
@@ -43,25 +50,11 @@ export class SimpleOrchestrator {
     try {
       console.log('[SimpleOrchestrator] Processing student input:', { sessionId, studentInput });
       
-      // Get or create session with recovery
+      // Get or create session
       let session = await this.getSession(sessionId);
       if (!session) {
-        console.log('[SimpleOrchestrator] Session not found, attempting recovery');
-        
-        // Try to recover context first
-        const recoveredContext = await contextRecovery.recoverSessionContext(
-          sessionId, 
-          studentInput.userId, 
-          studentInput.subject
-        );
-        
-        if (recoveredContext && !recoveredContext.isMinimal) {
-          console.log('[SimpleOrchestrator] Context recovered, creating session with recovered data');
-          session = await this.createSession(studentInput.userId, studentInput.subject);
-        } else {
-          console.log('[SimpleOrchestrator] No recovery possible, creating new session');
-          session = await this.createSession(studentInput.userId, studentInput.subject);
-        }
+        console.log('[SimpleOrchestrator] Creating new session');
+        session = await this.createSession(studentInput.userId, studentInput.subject);
       }
 
       // Add user message
@@ -150,13 +143,6 @@ export class SimpleOrchestrator {
           timestamp: new Date(),
           sessionId: session._id.toString()
         });
-      }
-
-      // Store context for recovery
-      try {
-        contextRecovery.storeContextForRecovery(session._id.toString(), context);
-      } catch (error) {
-        console.warn('[SimpleOrchestrator] Failed to store context for recovery:', error);
       }
 
       return {
@@ -334,7 +320,7 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
     }
   }
 
-  async getRecentMessages(sessionId, limit = 50) {
+  async getRecentMessages(sessionId, limit = 10) {
     try {
       await connectDB();
       
@@ -414,11 +400,45 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
   async buildTutoringContext(session, studentInput) {
     try {
       console.log('[SimpleOrchestrator] Building tutoring context for session:', session._id);
-      
-      // Try to get messages with fallback mechanisms
-      const messages = await this.getMessagesWithFallback(session._id);
+      const messages = await ChatMessage.find({ sessionId: session._id })
+        .sort({ timestamp: 1 })
+        .limit(10); // Last 10 messages for context
 
-      console.log('[SimpleOrchestrator] Retrieved messages:', messages.length);
+      console.log('[SimpleOrchestrator] Found messages:', messages.length);
+
+      // Fetch user profile information for personalization
+      let userProfile = null;
+      try {
+        if (studentInput.userId) {
+          userProfile = await User.findOne({ 
+            $or: [
+              { _id: studentInput.userId },
+              { email: studentInput.userId }
+            ]
+          });
+          console.log('[SimpleOrchestrator] User profile found:', userProfile ? 'Yes' : 'No');
+        }
+      } catch (profileError) {
+        console.error('[SimpleOrchestrator] Error fetching user profile:', profileError);
+      }
+
+      // Use guest profile data if user profile not found in database
+      const profileData = userProfile || studentInput.guestProfile || {};
+      console.log('[SimpleOrchestrator] Using profile data:', profileData ? 'Yes' : 'No');
+
+      // Build personalized curriculum context
+      const curriculumContext = {
+        subject: session.subject || 'general',
+        class: profileData?.grade?.toString() || '10',
+        board: profileData?.board || 'CBSE',
+        language: profileData?.langPref || 'en',
+        learningStyle: profileData?.learningStyle || 'Text',
+        pace: profileData?.pace || 'Normal',
+        state: profileData?.state || '',
+        city: profileData?.city || '',
+        role: profileData?.role || 'student',
+        ageBand: profileData?.ageBand || '11-14'
+      };
 
       return {
         sessionId: session._id.toString(),
@@ -427,112 +447,14 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
         currentInput: studentInput.text,
         currentImageUrl: studentInput.imageUrl, // Include image data
         messageHistory: messages,
-        curriculumContext: {
-          subject: session.subject || 'general',
-          class: '10', // Default to class 10
-          board: 'CBSE',
-          language: 'en'
-        }
+        curriculumContext: curriculumContext,
+        userProfile: userProfile, // Include full user profile for advanced personalization
+        profileData: profileData // Include the profile data being used (either from DB or guest)
       };
     } catch (error) {
       console.error('[SimpleOrchestrator] Error building tutoring context:', error);
-      // Return minimal context as fallback
-      return {
-        sessionId: session._id.toString(),
-        userId: studentInput.userId,
-        subject: session.subject || 'general',
-        currentInput: studentInput.text,
-        currentImageUrl: studentInput.imageUrl,
-        messageHistory: [],
-        curriculumContext: {
-          subject: session.subject || 'general',
-          class: '10',
-          board: 'CBSE',
-          language: 'en'
-        }
-      };
+      throw error;
     }
-  }
-
-  // Get messages with multiple fallback mechanisms
-  async getMessagesWithFallback(sessionId) {
-    try {
-      // Primary: Get all messages from database
-      const allMessages = await ChatMessage.find({ sessionId })
-        .sort({ timestamp: 1 });
-
-      if (allMessages.length > 0) {
-        // Apply context compression for long conversations
-        return this.compressMessageHistory(allMessages, 50);
-      }
-
-      // Fallback 1: Try with different query parameters
-      console.log('[SimpleOrchestrator] Primary query failed, trying fallback 1');
-      const fallbackMessages = await ChatMessage.find({ 
-        sessionId: sessionId.toString() 
-      }).sort({ createdAt: 1 }).limit(100);
-
-      if (fallbackMessages.length > 0) {
-        return this.compressMessageHistory(fallbackMessages, 50);
-      }
-
-      // Fallback 2: Try with ObjectId conversion
-      console.log('[SimpleOrchestrator] Fallback 1 failed, trying fallback 2');
-      const mongoose = await import('mongoose');
-      const objectIdSessionId = new mongoose.default.Types.ObjectId(sessionId);
-      const objectIdMessages = await ChatMessage.find({ 
-        sessionId: objectIdSessionId 
-      }).sort({ timestamp: 1 }).limit(100);
-
-      if (objectIdMessages.length > 0) {
-        return this.compressMessageHistory(objectIdMessages, 50);
-      }
-
-      // Fallback 3: Return empty array with warning
-      console.warn('[SimpleOrchestrator] All message retrieval methods failed, returning empty history');
-      return [];
-
-    } catch (error) {
-      console.error('[SimpleOrchestrator] Error in getMessagesWithFallback:', error);
-      
-      // Final fallback: Return empty array
-      return [];
-    }
-  }
-
-  // Compress message history for long conversations
-  compressMessageHistory(messages, maxMessages = 50) {
-    if (messages.length <= maxMessages) {
-      return messages;
-    }
-
-    console.log(`[SimpleOrchestrator] Compressing ${messages.length} messages to ${maxMessages}`);
-    
-    // Keep the most recent messages (last 30)
-    const recentMessages = messages.slice(-30);
-    
-    // Keep important messages from the beginning (first 10)
-    const importantMessages = messages.slice(0, 10);
-    
-    // Sample middle messages (remaining 10)
-    const middleStart = Math.floor(messages.length / 3);
-    const middleEnd = Math.floor(messages.length * 2 / 3);
-    const middleMessages = messages.slice(middleStart, middleEnd);
-    
-    // Combine and deduplicate
-    const compressedMessages = [
-      ...importantMessages,
-      ...middleMessages,
-      ...recentMessages
-    ];
-    
-    // Remove duplicates based on message ID
-    const uniqueMessages = compressedMessages.filter((message, index, self) => 
-      index === self.findIndex(m => m._id.toString() === message._id.toString())
-    );
-    
-    // Sort by timestamp to maintain chronological order
-    return uniqueMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
   }
 
   // Determine which section to generate based on user intent
@@ -704,6 +626,47 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
     }
   }
 
+  // Build personalized context based on user profile
+  buildPersonalizedContext(curriculumContext) {
+    const { class: grade, board, state, city, learningStyle, pace, role, ageBand } = curriculumContext;
+    
+    let context = `Student Profile:
+- Grade: Class ${grade}
+- Board: ${board}
+- Learning Style: ${learningStyle}
+- Pace Preference: ${pace}
+- Role: ${role}
+- Age Band: ${ageBand}`;
+
+    if (state) {
+      context += `\n- Location: ${city ? `${city}, ` : ''}${state}`;
+    }
+
+    // Add grade-specific guidance
+    if (parseInt(grade) <= 8) {
+      context += `\n- Use simple language and basic concepts appropriate for younger students`;
+    } else if (parseInt(grade) >= 11) {
+      context += `\n- Use advanced concepts and detailed explanations for senior students`;
+    }
+
+    // Add learning style guidance
+    if (learningStyle === 'Visual') {
+      context += `\n- Include visual descriptions and diagrams in explanations`;
+    } else if (learningStyle === 'Voice') {
+      context += `\n- Use conversational tone and audio-friendly explanations`;
+    } else if (learningStyle === 'Kinesthetic') {
+      context += `\n- Include hands-on activities and practical examples`;
+    }
+
+    // Add pace guidance
+    if (pace === 'Fast') {
+      context += `\n- Provide quick, direct answers without lengthy explanations`;
+    } else if (pace === 'Detailed') {
+      context += `\n- Provide thorough, comprehensive explanations with multiple examples`;
+    }
+
+    return context;
+  }
 
   // Section-specific prompt builders
   buildBigIdeaPrompt(input, imageUrl, curriculumContext, messageHistory) {
@@ -720,25 +683,38 @@ The student has uploaded an image. Please analyze the image carefully and provid
 - If the image contains text, equations, diagrams, or educational content, explain them clearly`
       : '';
 
-    return `You are Geni Ma'am, a warm tutor. Generate a Big Idea section per US-3.5 scaffolding framework.
+    // Build personalized context
+    const personalizedContext = this.buildPersonalizedContext(curriculumContext);
+
+    return `You are Geni Ma'am, a warm Indian tutor. Generate a Big Idea section per US-3.5 scaffolding framework.
 
 ${conversationContext}
 
 **US-3.5 BIG IDEA REQUIREMENTS:**
 - STRICT WORD LIMIT: Maximum 120 words  
 - PEDAGOGICAL STRUCTURE: Core concept explanation with grade-appropriate language
-- REAL-WORLD CONNECTION: Link to student's prior knowledge or everyday examples
+- REAL-WORLD CONNECTION: Link to student's prior knowledge or everyday examples relevant to Indian context
 - ACADEMIC TONE: Appropriate for Class ${curriculumContext.class} (${curriculumContext.board} board)
+
+**PERSONALIZED CONTEXT:**
+${personalizedContext}
 
 **CONTENT GUIDELINES:**
 Subject: ${curriculumContext.subject} | Language: ${curriculumContext.language === 'hi' ? 'Hindi' : curriculumContext.language === 'hinglish' ? 'Hinglish' : 'English'}
 Topic: ${curriculumContext.subject} | Original: "${input}"${imageContext}
 
+**INDIAN CONTEXT REQUIREMENTS:**
+- Use Indian names (like Priya, Arjun, Sita, Raj, etc.) in examples
+- Reference Indian places (like Delhi, Mumbai, Bangalore, Chennai, etc.)
+- Use Indian cultural references and examples
+- Make examples relevant to Indian students' experiences
+- Use Indian currency (₹), measurements, and contexts
+
 **OUTPUT FORMAT:**
 Provide clear, concise explanation of the core concept in exactly 120 words or fewer. Focus on:
 1. Main concept definition  
 2. Why it matters
-3. One concrete real-world relevant example
+3. One concrete real-world relevant example with Indian context
 4. Connection to student's question${imageUrl ? ' and the uploaded image' : ''}`;
   }
 
@@ -758,11 +734,17 @@ The student has uploaded an image. Please analyze the image and provide step-by-
     // Check if user specifically asked for detailed steps
     const isDetailedStepsRequest = /detailed steps|show detailed steps|break it down|explain step by step|walk me through/i.test(input);
 
+    // Build personalized context
+    const personalizedContext = this.buildPersonalizedContext(curriculumContext);
+
     return `You are Geni Ma'am. Here's the complete conversation context:
 
 ${conversationContext}
 
 EXAMPLE SECTION (3-5 numbered steps): Provide a ${isDetailedStepsRequest ? 'detailed, comprehensive' : 'clear'} step-by-step example based on the complete conversation history.${imageContext}
+
+**PERSONALIZED CONTEXT:**
+${personalizedContext}
 
 Context Details:
 Subject: ${curriculumContext.subject} (Class ${curriculumContext.class}) 
@@ -770,18 +752,26 @@ Topic: ${curriculumContext.subject}
 Board: ${curriculumContext.board}
 Language: ${curriculumContext.language === 'hi' ? 'Hindi' : curriculumContext.language === 'hinglish' ? 'Hinglish' : 'English'}
 
+**INDIAN CONTEXT REQUIREMENTS:**
+- Use Indian names (like Priya, Arjun, Sita, Raj, etc.) in examples
+- Reference Indian places (like Delhi, Mumbai, Bangalore, Chennai, etc.)
+- Use Indian cultural references and examples
+- Make examples relevant to Indian students' experiences
+- Use Indian currency (₹), measurements, and contexts
+
 IMPORTANT: 
 - Always reference the ORIGINAL question topic ("${input}")
 - If asking for "detailed steps", provide comprehensive, thorough steps with explanations
 - If asking for "simpler example", simplify the SAME topic, don't switch topics
 - Build on the previous explanation context provided
 - Each step should be clear, actionable, and educational${imageUrl ? '\n- Focus on the content visible in the uploaded image' : ''}
+- Use examples that are culturally relevant to Indian students
 
 Format as:
-Step 1: [Specific action] - [Clear reason and explanation]
-Step 2: [Specific action] - [Clear reason and explanation]
-Step 3: [Specific action] - [Clear reason and explanation]
-${isDetailedStepsRequest ? 'Step 4: [Additional detail] - [Further explanation]\nStep 5: [Final step] - [Summary and verification]' : ''}
+Step 1: [Specific action] - [Clear reason and explanation with Indian context]
+Step 2: [Specific action] - [Clear reason and explanation with Indian context]
+Step 3: [Specific action] - [Clear reason and explanation with Indian context]
+${isDetailedStepsRequest ? 'Step 4: [Additional detail] - [Further explanation with Indian context]\nStep 5: [Final step] - [Summary and verification with Indian context]' : ''}
 
 Focus specifically on the original topic: "${input}"${imageUrl ? ' and the uploaded image' : ''}`;
   }
@@ -936,88 +926,5 @@ Be warm, supportive, and educational. Keep response concise but informative.`;
       [this.sectionTypes.MCQ_VALIDATION]: 150
     };
     return tokenLimits[sectionType] || 300;
-  }
-
-  // Validate student input
-  validateStudentInput(studentInput) {
-    if (!studentInput) {
-      console.error('[SimpleOrchestrator] Student input is null or undefined');
-      return false;
-    }
-
-    if (!studentInput.text && !studentInput.imageUrl) {
-      console.error('[SimpleOrchestrator] Student input has no text or image');
-      return false;
-    }
-
-    if (studentInput.text && typeof studentInput.text !== 'string') {
-      console.error('[SimpleOrchestrator] Student input text is not a string');
-      return false;
-    }
-
-    if (studentInput.text && studentInput.text.trim().length === 0) {
-      console.error('[SimpleOrchestrator] Student input text is empty');
-      return false;
-    }
-
-    return true;
-  }
-
-  // Validate context
-  validateContext(context) {
-    if (!context) {
-      console.error('[SimpleOrchestrator] Context is null or undefined');
-      return false;
-    }
-
-    if (!context.sessionId) {
-      console.error('[SimpleOrchestrator] Context missing sessionId');
-      return false;
-    }
-
-    if (!context.userId) {
-      console.error('[SimpleOrchestrator] Context missing userId');
-      return false;
-    }
-
-    if (!context.currentInput) {
-      console.error('[SimpleOrchestrator] Context missing currentInput');
-      return false;
-    }
-
-    if (!Array.isArray(context.messageHistory)) {
-      console.error('[SimpleOrchestrator] Context messageHistory is not an array');
-      return false;
-    }
-
-    return true;
-  }
-
-  // Get or create session with retry mechanism
-  async getOrCreateSessionWithRetry(sessionId, userId, subject, maxRetries = 3) {
-    let lastError;
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        console.log(`[SimpleOrchestrator] Attempt ${attempt} to get/create session:`, sessionId);
-        let session = await this.getSession(sessionId);
-        if (!session) {
-          session = await this.createSession(userId, subject);
-        }
-        return session;
-      } catch (error) {
-        lastError = error;
-        console.error(`[SimpleOrchestrator] Attempt ${attempt} failed:`, error.message);
-        
-        if (attempt < maxRetries) {
-          // Wait before retry (exponential backoff)
-          const delay = Math.pow(2, attempt) * 1000;
-          console.log(`[SimpleOrchestrator] Waiting ${delay}ms before retry...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
-      }
-    }
-    
-    throw new Error(`Failed to get/create session after ${maxRetries} attempts: ${lastError.message}`);
   }
 }

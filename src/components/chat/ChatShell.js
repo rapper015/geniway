@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { useProfileCollection } from '../../contexts/ProfileCollectionContext';
 import { 
   ArrowLeft, 
   Settings, 
@@ -14,14 +16,259 @@ import WhatsAppComposer from './WhatsAppComposer';
 import VisionInputModal from './VisionInputModal';
 import { DEFAULT_QUICK_REPLIES } from './QuickRepliesBar';
 import SettingsModal from './SettingsModal';
+import { ProfileCollectionWrapper } from '../ProfileCollectionWrapper';
+import { StepWiseProfileWrapper } from '../StepWiseProfileWrapper';
 
 export default function ChatShell({ subject, onBack }) {
   const { user, isAuthenticated, isGuest, guestUser } = useAuth();
+  const { language } = useLanguage();
+  const { triggerProfileCollection, triggerStepModal, setOnStepComplete, currentStep } = useProfileCollection();
   
   // State management
   const [messages, setMessages] = useState([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState(null);
+
+  // Complete profile collection and create account
+  const completeProfileCollection = useCallback(async (finalProfile) => {
+    console.log('[ChatShell] completeProfileCollection called with:', finalProfile);
+    
+    // Save final profile
+    localStorage.setItem('guestProfile', JSON.stringify(finalProfile));
+    
+    // Create account automatically
+    try {
+      console.log('[ChatShell] Making API call to /api/auth/auto-register');
+      const response = await fetch('/api/auth/auto-register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName: finalProfile.firstName,
+          lastName: finalProfile.lastName,
+          email: finalProfile.email, // Added email
+          password: finalProfile.password,
+          role: finalProfile.role,
+          grade: finalProfile.grade,
+          board: finalProfile.board || 'CBSE',
+          subjects: finalProfile.subjects || [],
+          learningStyle: finalProfile.learningStyle || 'Text',
+          learningStyles: finalProfile.learningStyles || ['Text'],
+          pace: finalProfile.pace || 'Normal',
+          state: finalProfile.state || '',
+          city: finalProfile.city || '',
+          teachingLanguage: 'English',
+          contentMode: 'step-by-step',
+          fastTrackEnabled: false,
+          saveChatHistory: true,
+          studyStreaksEnabled: true,
+          breakRemindersEnabled: true,
+          masteryNudgesEnabled: true,
+          dataSharingEnabled: false,
+          isGuest: false // Now creating a real account
+        })
+      });
+
+      console.log('[ChatShell] API response status:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('[ChatShell] API response data:', data);
+        
+            // Success message
+            const successMessage = {
+              id: `profile-complete-${Date.now()}`,
+              content: `Thank you for providing your information, ${finalProfile.firstName}! If you have any questions, please ask.`,
+              type: 'ai',
+              messageType: 'text',
+              timestamp: new Date(),
+              subject: subject
+            };
+            
+            setMessages(prev => [...prev, successMessage]);
+        
+        // Store user data and refresh
+        localStorage.setItem('user', JSON.stringify(data.user));
+        localStorage.setItem('token', data.token);
+        
+        // Mark account as created in profile
+        const updatedProfile = { ...finalProfile, accountCreated: true };
+        localStorage.setItem('guestProfile', JSON.stringify(updatedProfile));
+        
+        // Reset profile collection state
+        setProfileStep(null);
+        setWaitingForProfileResponse(false);
+        setProfileData({});
+        
+        // Refresh page to update auth state
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Error creating account:', error);
+      
+      // Error message
+      const errorMessage = {
+        id: `profile-error-${Date.now()}`,
+        content: "Sorry, there was an error creating your account. You can continue using the chat as a guest.",
+        type: 'ai',
+        messageType: 'text',
+        timestamp: new Date(),
+        subject: subject
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
+      setProfileStep(null);
+      setWaitingForProfileResponse(false);
+    }
+  }, [subject]);
+
+  // Acknowledgment callback for step completion
+  const handleStepComplete = useCallback(async (step, data) => {
+    console.log('[ChatShell] handleStepComplete called with:', { step, data });
+    
+    // Only send acknowledgment if we have a valid step
+    if (!step || step === null || step === undefined) {
+      console.log('[ChatShell] No valid step provided, skipping acknowledgment');
+      return;
+    }
+
+    const getAcknowledgmentMessage = (step, data) => {
+      switch (step) {
+        case 'name':
+          const name = data.firstName || data.name || 'there';
+          return `Thank you for sharing your name, ${name}! I'm excited to help you learn. Feel free to ask me any questions!`;
+        
+        case 'role_grade':
+          const role = data.role === 'student' ? 'student' : data.role === 'parent' ? 'parent' : 'teacher';
+          return `Great! I understand you're a ${role}. I'll tailor my explanations accordingly. What would you like to learn about?`;
+        
+        case 'grade':
+          return `Perfect! Grade ${data.grade} is an exciting time for learning. I'll make sure to provide age-appropriate explanations. Ask me anything!`;
+        
+        case 'board':
+          return `Excellent! I'll keep the ${data.board} curriculum in mind when helping you. What subject would you like to explore?`;
+        
+        case 'subjects':
+          const subjects = Array.isArray(data.subjects) ? data.subjects.join(', ') : data.subjects;
+          return `Wonderful! I see you're interested in ${subjects}. I'll focus on these areas when helping you. What would you like to know?`;
+        
+        case 'learning_style':
+          return `Perfect! I'll present information in a ${data.learningStyle} way that works best for you. Feel free to ask me any questions!`;
+        
+        case 'pace':
+          return `Great! I'll provide ${data.pace} explanations that match your learning pace. What would you like to learn about?`;
+        
+        case 'location':
+          return `Thanks for sharing! I'll keep ${data.state} in mind for relevant examples. What can I help you with today?`;
+        
+        case 'email': // Added
+          return `Perfect! Your email has been saved. Now let's set up a password for your account.`;
+        
+        case 'password':
+          // Don't send acknowledgment message, we'll trigger complete step automatically
+          return null;
+        
+        case 'complete':
+          // For complete step, we'll handle account creation in the callback
+          return null; // Don't send acknowledgment message, account creation will handle it
+        
+        default:
+          console.log('[ChatShell] Unknown step:', step);
+          return null; // Don't send message for unknown steps
+      }
+    };
+
+    // Handle password step - automatically trigger complete step
+    if (step === 'password') {
+      console.log('[ChatShell] Password step completed, triggering complete step');
+      // Get the updated profile with password
+      const updatedProfile = JSON.parse(localStorage.getItem('guestProfile') || '{}');
+      console.log('[ChatShell] Updated profile with password:', updatedProfile);
+      
+      // Trigger complete step immediately
+      setTimeout(() => {
+        console.log('[ChatShell] Triggering complete step modal');
+        triggerStepModal('complete', updatedProfile);
+      }, 500); // Small delay to ensure password is saved
+      return;
+    }
+
+    // Handle complete step separately (account creation)
+    if (step === 'complete') {
+      console.log('[ChatShell] Handling complete step - creating account with data:', data);
+      try {
+        await completeProfileCollection(data);
+        console.log('[ChatShell] Account creation completed successfully');
+      } catch (error) {
+        console.error('[ChatShell] Error creating account:', error);
+        // Add error message
+        const errorMessage = {
+          id: `error-${Date.now()}`,
+          content: "Sorry, there was an error creating your account. You can continue using the chat as a guest.",
+          type: 'ai',
+          messageType: 'text',
+          timestamp: new Date(),
+          subject: subject
+        };
+        setMessages(prev => [...prev, errorMessage]);
+      }
+      return;
+    }
+
+    const messageContent = getAcknowledgmentMessage(step, data);
+    if (!messageContent) {
+      return; // Don't send message if content is null
+    }
+
+    const acknowledgmentMessage = {
+      id: `ack-${step}-${Date.now()}`,
+      content: messageContent,
+      type: 'ai',
+      messageType: 'text',
+      timestamp: new Date(),
+      subject: subject
+    };
+
+    setMessages(prev => [...prev, acknowledgmentMessage]);
+  }, [subject, completeProfileCollection]);
+
+  // Set up the step completion callback
+  useEffect(() => {
+    console.log('[ChatShell] Setting up step completion callback');
+    setOnStepComplete(handleStepComplete);
+  }, [setOnStepComplete, handleStepComplete]);
+
+  // Debug: Log when complete step modal is triggered
+  useEffect(() => {
+    if (currentStep === 'complete') {
+      console.log('[ChatShell] Complete step modal is now open');
+    }
+  }, [currentStep]);
+
+  // Load messages from localStorage on component mount
+  useEffect(() => {
+    const savedMessages = localStorage.getItem('chatHistory');
+    if (savedMessages) {
+      try {
+        const parsedMessages = JSON.parse(savedMessages);
+        if (parsedMessages.length > 0) {
+          setMessages(parsedMessages);
+          console.log('[ChatShell] Loaded', parsedMessages.length, 'messages from localStorage');
+        }
+      } catch (error) {
+        console.error('[ChatShell] Error loading messages from localStorage:', error);
+      }
+    }
+  }, []);
+
+  // Save messages to localStorage whenever they change
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem('chatHistory', JSON.stringify(messages));
+      console.log('[ChatShell] Saved', messages.length, 'messages to localStorage');
+    }
+  }, [messages]);
   const [mode, setMode] = useState('step-by-step');
   const [userId, setUserId] = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(true);
@@ -59,18 +306,38 @@ export default function ChatShell({ subject, onBack }) {
 
   // Initialize user ID
   useEffect(() => {
+    console.log('[ChatShell] Initializing user ID:', { isAuthenticated, user, isGuest, guestUser });
+    
     if (isAuthenticated && user) {
-      setUserId(user.id);
+      // Use user._id if available (from database), otherwise use user.id
+      const userIdToSet = user._id || user.id;
+      setUserId(userIdToSet);
+      console.log('[ChatShell] Set userId from authenticated user:', userIdToSet);
     } else if (isGuest && guestUser) {
       setUserId(guestUser.id);
+      console.log('[ChatShell] Set userId from guest user:', guestUser.id);
     } else {
-      // Generate persistent guest UUID
+      // Check if user data exists in localStorage (after account creation)
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          const userIdToSet = userData._id || userData.id;
+          setUserId(userIdToSet);
+          console.log('[ChatShell] Using stored user ID:', userIdToSet, 'from userData:', userData);
+        } catch (error) {
+          console.error('[ChatShell] Error parsing stored user:', error);
+        }
+      }
+      
+      // Generate persistent guest UUID if no user data
       let guestUuid = localStorage.getItem('guest_uuid');
       if (!guestUuid) {
         guestUuid = `guest_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
         localStorage.setItem('guest_uuid', guestUuid);
       }
       setUserId(guestUuid);
+      console.log('[ChatShell] Set userId from guest UUID:', guestUuid);
     }
   }, [isAuthenticated, user, isGuest, guestUser]);
 
@@ -279,6 +546,13 @@ export default function ChatShell({ subject, onBack }) {
     let sessionId = currentSessionId;
     if (!sessionId) {
       console.log('[ChatShell] No current session, creating new one...');
+      console.log('[ChatShell] Session creation data:', { 
+        userId, 
+        userIdType: typeof userId,
+        subject: subject || detectSubject(text),
+        isAuthenticated,
+        isGuest: !isAuthenticated 
+      });
       try {
         const response = await fetch('/api/sessions', {
           method: 'POST',
@@ -355,87 +629,6 @@ export default function ChatShell({ subject, onBack }) {
     setSettingsRefreshKey(prev => prev + 1);
   }, []);
 
-  // Complete profile collection and create account
-  const completeProfileCollection = useCallback(async (finalProfile) => {
-    // Save final profile
-    localStorage.setItem('guestProfile', JSON.stringify(finalProfile));
-    
-    // Create account automatically
-    try {
-      const response = await fetch('/api/auth/auto-register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          firstName: finalProfile.firstName,
-          lastName: finalProfile.lastName,
-          role: finalProfile.role,
-          grade: finalProfile.grade,
-          board: finalProfile.board || 'CBSE',
-          subjects: finalProfile.subjects || [],
-          learningStyle: finalProfile.learningStyle || 'Text',
-          learningStyles: finalProfile.learningStyles || ['Text'],
-          pace: finalProfile.pace || 'Normal',
-          state: finalProfile.state || '',
-          city: finalProfile.city || '',
-          teachingLanguage: 'English',
-          contentMode: 'step-by-step',
-          fastTrackEnabled: false,
-          saveChatHistory: true,
-          studyStreaksEnabled: true,
-          breakRemindersEnabled: true,
-          masteryNudgesEnabled: true,
-          dataSharingEnabled: false,
-          isGuest: true
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        
-            // Success message
-            const successMessage = {
-              id: `profile-complete-${Date.now()}`,
-              content: `Thank you for providing your information, ${finalProfile.firstName}! If you have any questions, please ask.`,
-              type: 'ai',
-              messageType: 'text',
-              timestamp: new Date(),
-              subject: subject
-            };
-            
-            setMessages(prev => [...prev, successMessage]);
-        
-        // Store user data and refresh
-        localStorage.setItem('user', JSON.stringify(data.user));
-        localStorage.setItem('token', data.token);
-        
-        // Reset profile collection state
-        setProfileStep(null);
-        setWaitingForProfileResponse(false);
-        setProfileData({});
-        
-        // Refresh page to update auth state
-        setTimeout(() => {
-          window.location.reload();
-        }, 2000);
-      }
-    } catch (error) {
-      console.error('Error creating account:', error);
-      
-      // Error message
-      const errorMessage = {
-        id: `profile-error-${Date.now()}`,
-        content: "I've saved your information! You can continue learning now.",
-        type: 'ai',
-        messageType: 'text',
-        timestamp: new Date(),
-        subject: subject
-      };
-      
-      setMessages(prev => [...prev, errorMessage]);
-      setProfileStep(null);
-      setWaitingForProfileResponse(false);
-    }
-  }, [subject]);
 
   // Handle profile collection responses
   const handleProfileResponse = useCallback(async (response) => {
@@ -774,21 +967,9 @@ export default function ChatShell({ subject, onBack }) {
       const existingProfile = JSON.parse(localStorage.getItem('guestProfile') || '{}');
       const shouldAskProfile = shouldAskForProfileInfo(gotItCount, existingProfile);
       
+      // Trigger step-wise modal if needed
       if (shouldAskProfile.ask) {
-        setProfileStep(shouldAskProfile.step);
-        setProfileData(existingProfile);
-        setWaitingForProfileResponse(true);
-        
-        const profileMessage = {
-          id: `profile-${shouldAskProfile.step}-${Date.now()}`,
-          content: shouldAskProfile.message,
-          type: 'ai',
-          messageType: 'text',
-          timestamp: new Date(),
-          subject: subject
-        };
-        
-        setMessages(prev => [...prev, profileMessage]);
+        triggerStepModal(shouldAskProfile.step, existingProfile);
       } else {
         // Encourage user to ask another question
         const encourageMessage = {
@@ -805,9 +986,75 @@ export default function ChatShell({ subject, onBack }) {
     }
   }, [quizStep, currentQuiz, subject, gotItCount]);
 
+  // Check if profile is complete in localStorage
+  const isProfileComplete = useCallback((profile) => {
+    console.log('[ChatShell] Checking profile completion:', profile);
+    
+    // Base required fields for all roles
+    const baseRequiredFields = ['firstName', 'role', 'board', 'subjects', 'learningStyle', 'pace', 'state'];
+    
+    // Check base fields
+    const baseComplete = baseRequiredFields.every(field => {
+      if (field === 'subjects') {
+        return profile[field] && Array.isArray(profile[field]) && profile[field].length > 0;
+      }
+      return profile[field] && profile[field].toString().trim() !== '';
+    });
+    
+    // For students, also require grade
+    if (profile.role === 'student') {
+      const gradeComplete = profile.grade && profile.grade.toString().trim() !== '';
+      console.log('[ChatShell] Student profile check:', { baseComplete, gradeComplete, grade: profile.grade });
+      return baseComplete && gradeComplete;
+    }
+    
+    // For parents and teachers, grade is not required
+    console.log('[ChatShell] Non-student profile check:', { baseComplete, role: profile.role });
+    return baseComplete;
+  }, []);
+
   // Determine when to ask for profile information based on gotItCount
   const shouldAskForProfileInfo = useCallback((currentGotItCount, existingProfile) => {
     console.log('[ChatShell] shouldAskForProfileInfo called:', { currentGotItCount, existingProfile });
+    
+    // Don't ask for account creation if user is already authenticated
+    if (isAuthenticated) {
+      return {
+        ask: false,
+        step: null,
+        message: null
+      };
+    }
+    
+    // If profile is already complete, ask for email first
+    if (isProfileComplete(existingProfile) && !existingProfile.email) {
+      console.log('[ChatShell] Profile complete, asking for email');
+      return {
+        ask: true,
+        step: 'email',
+        message: "Great! I see your profile is complete. Let's create your account so you can save your progress and access it from anywhere!"
+      };
+    }
+    
+    // If profile is complete and has email but no password, ask for password
+    if (isProfileComplete(existingProfile) && existingProfile.email && !existingProfile.password) {
+      console.log('[ChatShell] Profile complete with email, asking for password');
+      return {
+        ask: true,
+        step: 'password',
+        message: "Perfect! Now let's set up a password for your account."
+      };
+    }
+    
+    // If profile is complete and has both email and password, ask for account creation
+    if (isProfileComplete(existingProfile) && existingProfile.email && existingProfile.password && !existingProfile.accountCreated) {
+      console.log('[ChatShell] Profile complete with email and password, creating account');
+      return {
+        ask: true,
+        step: 'complete',
+        message: "Perfect! Your profile is complete and you have both email and password set. Let me create your account now!"
+      };
+    }
     
     // First "Got it" (gotItCount = 1): Ask for name
     if (currentGotItCount === 1 && (!existingProfile.firstName || !existingProfile.lastName)) {
@@ -881,8 +1128,17 @@ export default function ChatShell({ subject, onBack }) {
       };
     }
     
-    // Ninth "Got it" (gotItCount = 9): Complete profile and auto-register
-    if (currentGotItCount === 9 && existingProfile.firstName && existingProfile.role) {
+    // Ninth "Got it" (gotItCount = 9): Ask for password
+    if (currentGotItCount === 9 && existingProfile.firstName && existingProfile.role && !existingProfile.password) {
+      return {
+        ask: true,
+        step: 'password',
+        message: "Great! Now let's create your account. Please set a password for your account."
+      };
+    }
+    
+    // Tenth "Got it" (gotItCount = 10): Complete profile and auto-register
+    if (currentGotItCount === 10 && existingProfile.firstName && existingProfile.role && existingProfile.password) {
       return {
         ask: true,
         step: 'complete',
@@ -896,7 +1152,7 @@ export default function ChatShell({ subject, onBack }) {
       step: null,
       message: null
     };
-  }, []);
+  }, [isProfileComplete, isAuthenticated]);
 
 
   // Stream real AI response from orchestrator API with optimized SSE
@@ -937,8 +1193,17 @@ export default function ChatShell({ subject, onBack }) {
         message: userInput,
         sessionId: sessionId,
         messageType: 'text',
-        userId: userId
+        userId: userId,
+        language: language
       };
+
+      // Include profile data for guest users (not yet in database)
+      if (isGuest && !isAuthenticated) {
+        const guestProfile = JSON.parse(localStorage.getItem('guestProfile') || '{}');
+        if (Object.keys(guestProfile).length > 0) {
+          requestBody.guestProfile = guestProfile;
+        }
+      }
 
       // Only include imageUrl if it exists and is not too large for URL
       if (imageUrl) {
@@ -1098,7 +1363,37 @@ export default function ChatShell({ subject, onBack }) {
       const eventSource = new EventSource(`/api/solve?${params.toString()}`);
       currentSSERef.current = eventSource;
 
+      // Add connection state logging
+      eventSource.onopen = (event) => {
+        console.log('[ChatShell] SSE connection opened:', event);
+        clearTimeout(connectionTimeout); // Clear the connection timeout
+      };
+
+      // Add a connection timeout to detect if EventSource fails to connect
+      const connectionTimeout = setTimeout(() => {
+        if (eventSource.readyState === EventSource.CONNECTING) {
+          console.error('[ChatShell] EventSource connection timeout - still connecting after 5 seconds');
+          eventSource.close();
+          cleanup();
+          setHideQuickActions(false);
+          
+          // Show error message
+          setMessages(prev => {
+            const newMessages = [...prev];
+            const lastIndex = newMessages.length - 1;
+            if (newMessages[lastIndex]?.type === 'ai') {
+              newMessages[lastIndex] = {
+                ...newMessages[lastIndex],
+                content: "I apologize, but I'm having trouble connecting right now. Please try again."
+              };
+            }
+            return newMessages;
+          });
+        }
+      }, 5000); // 5 second connection timeout
+
       const cleanup = () => {
+        clearTimeout(connectionTimeout); // Clear connection timeout
         if (eventSource.readyState !== EventSource.CLOSED) {
           eventSource.close();
         }
@@ -1217,6 +1512,15 @@ export default function ChatShell({ subject, onBack }) {
 
       eventSource.onerror = (error) => {
         console.error('SSE error:', error);
+        console.error('EventSource readyState:', eventSource.readyState);
+        console.error('EventSource url:', eventSource.url);
+        console.error('Error event details:', {
+          type: error.type,
+          target: error.target,
+          readyState: error.target?.readyState,
+          url: error.target?.url
+        });
+        
         clearTimeout(timeout);
         cleanup();
         // Show quick actions even on error
@@ -1438,12 +1742,12 @@ export default function ChatShell({ subject, onBack }) {
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-              <span className="text-white text-sm font-semibold">G</span>
+            <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
+              <img src="/genimam.png" alt="" />
             </div>
             <div>
               <h1 className="text-lg font-semibold text-white">GeniWay</h1>
-              <p className="text-sm text-white/80">AI Doubt Solver</p>
+              {/* <p className="text-sm text-white/80">AI Doubt Solver</p> */}
             </div>
           </div>
 
@@ -1545,6 +1849,12 @@ export default function ChatShell({ subject, onBack }) {
         onComplete={handleVisionComplete}
         onError={handleVisionError}
       />
+
+      {/* Profile Collection Modal */}
+      <ProfileCollectionWrapper />
+      
+      {/* Step-wise Profile Collection Modals */}
+      <StepWiseProfileWrapper />
 
     </div>
   );

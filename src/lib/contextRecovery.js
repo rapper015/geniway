@@ -64,11 +64,8 @@ export class ContextRecovery {
   // Recover context from database
   async recoverFromDatabase(sessionId, userId, subject) {
     try {
-      const { connectDB } = await import('../lib/mongodb');
-      const ChatSessionNew = (await import('../models/ChatSessionNew')).default;
-      const { ChatMessage } = await import('../models/ChatMessage');
-
-      await connectDB();
+      const ChatSessionNew = (await import('../../models/ChatSessionNew')).default;
+      const { ChatMessage } = await import('../../models/ChatMessage');
 
       // Try to find session
       const session = await ChatSessionNew.findById(sessionId);
@@ -77,12 +74,10 @@ export class ContextRecovery {
       }
 
       // Get recent messages
-      const messages = await ChatMessage.find({ sessionId })
-        .sort({ timestamp: 1 })
-        .limit(50);
+      const messages = await ChatMessage.getSessionMessages(sessionId, 50, 0);
 
       return {
-        sessionId: session._id.toString(),
+        sessionId: session.id,
         userId: userId,
         subject: session.subject || subject || 'general',
         messageHistory: messages,

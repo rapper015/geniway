@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLanguage } from '../../contexts/LanguageContext';
 import Modal, { ModalHeader, ModalBody, ModalFooter } from '../ui/Modal';
 import {
   Settings,
@@ -40,12 +41,12 @@ const subjects = [
 ];
 
 const languages = [
-  'English', 'Hindi', 'Tamil', 'Telugu', 'Bengali', 'Marathi',
-  'Gujarati', 'Kannada', 'Malayalam', 'Punjabi', 'Urdu'
+  'English', 'Hindi', 'Hinglish'
 ];
 
 export default function SettingsModal({ isOpen, onClose, trigger, localProfileData = {} }) {
   const { user, isAuthenticated, isGuest, guestUser } = useAuth();
+  const { language, changeLanguage, getLanguageDisplayName } = useLanguage();
   
   const [profile, setProfile] = useState(null);
   const [userData, setUserData] = useState(null);
@@ -535,17 +536,19 @@ export default function SettingsModal({ isOpen, onClose, trigger, localProfileDa
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">App Language (UI)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Response Language</label>
                   <select
-                    value={profile.lang_pref || 'en'}
-                    onChange={(e) => updateProfile({ lang_pref: e.target.value })}
+                    value={language}
+                    onChange={(e) => changeLanguage(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="en">English</option>
-                    <option value="hi">हिंदी (Hindi)</option>
-                    <option value="ta">தமிழ் (Tamil)</option>
-                    <option value="bn">বাংলা (Bengali)</option>
+                    <option value="english">English</option>
+                    <option value="hindi">हिंदी (Hindi)</option>
+                    <option value="hinglish">Hinglish</option>
                   </select>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Choose the language for AI responses
+                  </p>
                 </div>
               </div>
             )}

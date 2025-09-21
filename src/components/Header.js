@@ -16,21 +16,22 @@ export default function Header({ onLoginClick }) {
       <div className="max-w-md mx-auto px-4 h-16 flex items-center justify-between">
         {/* Logo */}
         <div className="flex items-center gap-3">
-          <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center">
+          {/* <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center">
             <span className="text-white font-bold text-sm">G</span>
           </div>
-          <span className="font-semibold text-gray-900 text-lg">GeniWay</span>
+          <span className="font-semibold text-gray-900 text-lg">GeniWay</span> */}
+          <img src="/logo.png" alt="GeniWay" className="w-28" />
         </div>
         
         {/* Right Controls */}
         <div className="flex items-center gap-2">
           {/* Language Toggle */}
-          <button 
+          {/* <button 
             className="px-3 py-1.5 text-sm border border-gray-300 rounded-full text-gray-600 hover:bg-gray-50 transition-colors" 
             data-testid="lang-toggle"
           >
             EN / हिंदी
-          </button>
+          </button> */}
           
           {/* Login Button - only show if not authenticated */}
           {!isAuthenticated && (

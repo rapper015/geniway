@@ -9,7 +9,7 @@ const orchestrator = new SimpleOrchestrator();
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { sessionId, message, messageType = 'text', imageUrl, userId } = body;
+    const { sessionId, message, messageType = 'text', imageUrl, userId, guestProfile } = body;
 
     if (!sessionId || !message) {
       return NextResponse.json(
@@ -48,6 +48,7 @@ export async function POST(request) {
             imageUrl: imageUrl || undefined,
             timestamp: new Date(),
             userId: userId || 'anonymous', // Use actual user ID from request
+            guestProfile: guestProfile || undefined, // Include guest profile data
             subject: 'general'
           };
 

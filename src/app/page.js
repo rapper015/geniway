@@ -91,7 +91,7 @@ export default function Home() {
     <div className="bg-background text-foreground">
       <Header onLoginClick={handleLoginClick} />
       <Hero />
-      <InlineInputBar />
+      {/* <InlineInputBar /> */}
       <TrustChips />
       <SocialProof />
       <HowItWorks />

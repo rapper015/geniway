@@ -5,9 +5,12 @@ import jwt from 'jsonwebtoken';
 
 export async function POST(request) {
   try {
+    console.log('[auto-register] API called');
     const { 
       firstName, 
       lastName, 
+      email,
+      password,
       role, 
       grade, 
       board,
@@ -27,6 +30,8 @@ export async function POST(request) {
       dataSharingEnabled,
       isGuest = true 
     } = await request.json();
+    
+    console.log('[auto-register] Request data:', { firstName, lastName, email, role, isGuest });
 
     if (!firstName || !lastName || !role) {
       return NextResponse.json(
@@ -35,18 +40,29 @@ export async function POST(request) {
       );
     }
 
-    await connectDB();
+    // For real accounts (not guest), email and password are required
+    if (!isGuest && (!email || !password)) {
+      return NextResponse.json(
+        { error: 'Email and password are required for account creation' },
+        { status: 400 }
+      );
+    }
 
-    // Create a temporary email for guest users
-    const tempEmail = `guest_${Date.now()}@geniway.local`;
+    await connectDB();
+    console.log('[auto-register] Database connected');
+
+    // Use provided email or create a temporary email for guest users
+    const userEmail = email || `guest_${Date.now()}@geniway.local`;
     const fullName = `${firstName} ${lastName}`;
+    console.log('[auto-register] Creating user with email:', userEmail);
 
     // Create new user with comprehensive profile
     const user = new User({
       name: fullName,
       firstName: firstName,
       lastName: lastName,
-      email: tempEmail,
+      email: userEmail,
+      password: password || undefined, // Only set password if provided
       role: role,
       grade: grade || null,
       isGuest: isGuest,
@@ -68,7 +84,7 @@ export async function POST(request) {
       dataSharingEnabled: dataSharingEnabled || false,
       ageBand: grade && grade <= 8 ? '6-10' : grade && grade <= 10 ? '11-14' : '15-18',
       // Profile completion tracking
-      profileCompletionStep: 9, // Completed all 9 steps
+      profileCompletionStep: 9, // Completed all steps (max allowed is 9)
       profileCompleted: true,
       // Learning analytics
       totalQuestionsAsked: 0,
@@ -83,7 +99,9 @@ export async function POST(request) {
       }
     });
 
+    console.log('[auto-register] Saving user to database');
     await user.save();
+    console.log('[auto-register] User saved successfully with ID:', user._id);
 
     // Generate JWT token
     const token = jwt.sign(
