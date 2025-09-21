@@ -175,6 +175,21 @@ export default function SettingsModal({ isOpen, onClose, trigger, localProfileDa
         ...(userData?.email && { email: userData.email })
       };
 
+      // For guest users, just save to localStorage
+      if (isGuest || !isAuthenticated) {
+        console.log('[SettingsModal] Saving guest profile to localStorage:', updateData);
+        localStorage.setItem('guestProfile', JSON.stringify(updateData));
+        
+        // Update local state
+        setProfile(updateData);
+        
+        // Show success message
+        alert('Settings saved successfully! (Saved locally)');
+        return;
+      }
+
+      // For authenticated users, make API call
+      console.log('[SettingsModal] Saving authenticated user profile to database:', updateData);
       const response = await fetch(`/api/profile/${effectiveUserId}`, {
         method: 'PATCH',
         headers: {
@@ -207,6 +222,37 @@ export default function SettingsModal({ isOpen, onClose, trigger, localProfileDa
 
   const exportData = async (format) => {
     try {
+      // For guest users, export from localStorage
+      if (isGuest || !isAuthenticated) {
+        console.log('[SettingsModal] Exporting guest data from localStorage');
+        const guestProfile = JSON.parse(localStorage.getItem('guestProfile') || '{}');
+        const chatHistory = JSON.parse(localStorage.getItem('chatHistory') || '[]');
+        
+        const exportData = {
+          profile: guestProfile,
+          chatHistory: chatHistory,
+          exportDate: new Date().toISOString(),
+          format: format
+        };
+        
+        if (format === 'json') {
+          const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `geniway-guest-data-${new Date().toISOString().split('T')[0]}.json`;
+          a.click();
+          URL.revokeObjectURL(url);
+        } else {
+          // For other formats, just show the data
+          alert(`Guest data export (${format.toUpperCase()}):\n\nProfile: ${JSON.stringify(guestProfile, null, 2)}\n\nChat History: ${chatHistory.length} messages`);
+        }
+        
+        alert(`Your guest data has been exported in ${format.toUpperCase()} format.`);
+        return;
+      }
+
+      // For authenticated users, make API call
       const response = await fetch(`/api/profile/${effectiveUserId}/export`, {
         method: 'POST',
         headers: {
@@ -230,6 +276,16 @@ export default function SettingsModal({ isOpen, onClose, trigger, localProfileDa
     }
 
     try {
+      // For guest users, clear from localStorage
+      if (isGuest || !isAuthenticated) {
+        console.log('[SettingsModal] Clearing guest chat history from localStorage');
+        localStorage.removeItem('chatHistory');
+        localStorage.removeItem('currentSessionId');
+        alert('All chat history has been cleared from your local storage.');
+        return;
+      }
+
+      // For authenticated users, make API call
       const response = await fetch(`/api/profile/${effectiveUserId}/chats`, {
         method: 'DELETE',
       });
