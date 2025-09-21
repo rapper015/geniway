@@ -51,6 +51,21 @@ export async function POST(request) {
     await connectDB();
     console.log('[auto-register] Database connected');
 
+    // Convert grade to number if it's a string
+    const convertGradeToNumber = (gradeValue) => {
+      if (!gradeValue) return null;
+      if (typeof gradeValue === 'number') return gradeValue;
+      if (typeof gradeValue === 'string') {
+        // Handle formats like "Class 8", "8", "Grade 8", etc.
+        const match = gradeValue.match(/(\d+)/);
+        return match ? parseInt(match[1], 10) : null;
+      }
+      return null;
+    };
+
+    const numericGrade = convertGradeToNumber(grade);
+    console.log('[auto-register] Grade conversion:', { original: grade, converted: numericGrade });
+
     // Use provided email or create a temporary email for guest users
     const userEmail = email || `guest_${Date.now()}@geniway.local`;
     const fullName = `${firstName} ${lastName}`;
@@ -64,7 +79,7 @@ export async function POST(request) {
       email: userEmail,
       password: password || undefined, // Only set password if provided
       role: role,
-      grade: grade || null,
+      grade: numericGrade,
       isGuest: isGuest,
       board: board || 'CBSE',
       subjects: subjects || [],
@@ -82,7 +97,7 @@ export async function POST(request) {
       breakRemindersEnabled: breakRemindersEnabled !== undefined ? breakRemindersEnabled : true,
       masteryNudgesEnabled: masteryNudgesEnabled !== undefined ? masteryNudgesEnabled : true,
       dataSharingEnabled: dataSharingEnabled || false,
-      ageBand: grade && grade <= 8 ? '6-10' : grade && grade <= 10 ? '11-14' : '15-18',
+      ageBand: numericGrade && numericGrade <= 8 ? '6-10' : numericGrade && numericGrade <= 10 ? '11-14' : '15-18',
       // Profile completion tracking
       profileCompletionStep: 9, // Completed all steps (max allowed is 9)
       profileCompleted: true,

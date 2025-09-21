@@ -31,6 +31,21 @@ export async function POST(request) {
 
     await connectDB();
 
+    // Convert grade to number if it's a string
+    const convertGradeToNumber = (gradeValue) => {
+      if (!gradeValue) return null;
+      if (typeof gradeValue === 'number') return gradeValue;
+      if (typeof gradeValue === 'string') {
+        // Handle formats like "Class 8", "8", "Grade 8", etc.
+        const match = gradeValue.match(/(\d+)/);
+        return match ? parseInt(match[1], 10) : null;
+      }
+      return null;
+    };
+
+    const numericGrade = convertGradeToNumber(grade);
+    console.log('[register] Grade conversion:', { original: grade, converted: numericGrade });
+
     // Check if user already exists
     const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
@@ -46,7 +61,7 @@ export async function POST(request) {
       password,
       name,
       role: role || 'student',
-      grade,
+      grade: numericGrade,
       school
     });
 
