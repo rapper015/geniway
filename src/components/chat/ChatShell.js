@@ -1753,7 +1753,7 @@ export default function ChatShell({ subject, onBack }) {
 
           <div className="flex items-center gap-2">
             {/* Debug button to test quick actions */}
-            <button
+            {/* <button
               onClick={() => {
                 console.log('[ChatShell] Debug: Force showing quick actions');
                 setHideQuickActions(false);
@@ -1762,7 +1762,7 @@ export default function ChatShell({ subject, onBack }) {
               className="px-3 py-1 text-xs bg-white/20 text-white rounded hover:bg-white/30"
             >
               Show Quick Actions
-            </button>
+            </button> */}
             
             {/* Network status */}
             <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full ${
