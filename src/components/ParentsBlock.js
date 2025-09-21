@@ -1,23 +1,22 @@
 'use client';
 
-import { useState } from "react";
-
 export default function ParentsBlock() {
-  const [isLoading, setIsLoading] = useState(false);
 
-  const handleWhatsAppClick = async () => {
-    setIsLoading(true);
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      console.log('WhatsApp link generated');
-      alert('WhatsApp link generated! (Demo)');
-    } catch (error) {
-      console.error('Failed to generate WhatsApp link:', error);
-      alert('Failed to generate WhatsApp link');
-    } finally {
-      setIsLoading(false);
-    }
+  const handleWhatsAppClick = () => {
+    const message = `Hi! I found this amazing AI tutor for solving doubts - Geni Ma'am! 🎓
+
+She can help with:
+✅ Math, Science, Social Science
+✅ Step-by-step explanations  
+✅ Works in English/Hindi/Hinglish
+✅ Free during beta!
+
+Try it here: ${window.location.origin}/chat
+
+Perfect for Class 6-12 students! 📚`;
+
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
   };
 
   const safetyFeatures = [
@@ -41,12 +40,11 @@ export default function ParentsBlock() {
             ))}
           </div>
           <button 
-            className="w-full py-4 bg-green-500 text-white font-semibold rounded-2xl hover:bg-green-600 transition-colors min-h-[44px] disabled:opacity-50" 
+            className="w-full py-4 bg-green-500 text-white font-semibold rounded-2xl hover:bg-green-600 transition-colors min-h-[44px]" 
             data-testid="button-whatsapp-parent"
             onClick={handleWhatsAppClick}
-            disabled={isLoading}
           >
-            {isLoading ? "Generating..." : "📱 Send link to my child (WhatsApp)"}
+            📱 Send link to my child (WhatsApp)
           </button>
         </div>
       </div>

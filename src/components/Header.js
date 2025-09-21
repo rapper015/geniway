@@ -11,6 +11,7 @@ export default function Header({ onLoginClick }) {
     router.push('/chat');
   };
 
+
   return (
     <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200">
       <div className="max-w-md mx-auto px-4 h-16 flex items-center justify-between">
@@ -25,14 +26,6 @@ export default function Header({ onLoginClick }) {
         
         {/* Right Controls */}
         <div className="flex items-center gap-2">
-          {/* Language Toggle */}
-          {/* <button 
-            className="px-3 py-1.5 text-sm border border-gray-300 rounded-full text-gray-600 hover:bg-gray-50 transition-colors" 
-            data-testid="lang-toggle"
-          >
-            EN / हिंदी
-          </button> */}
-          
           {/* Login Button - only show if not authenticated */}
           {!isAuthenticated && (
             <button 

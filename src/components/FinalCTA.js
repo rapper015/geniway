@@ -1,29 +1,29 @@
 'use client';
 
-import { useState } from "react";
 import { useRouter } from 'next/navigation';
 
 export default function FinalCTA() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
 
   const handleStartClick = () => {
     router.push('/chat');
   };
 
-  const handleWhatsAppClick = async () => {
-    setIsLoading(true);
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      console.log('WhatsApp link generated');
-      alert('WhatsApp link generated! (Demo)');
-    } catch (error) {
-      console.error('Failed to generate WhatsApp link:', error);
-      alert('Failed to generate WhatsApp link');
-    } finally {
-      setIsLoading(false);
-    }
+  const handleWhatsAppClick = () => {
+    const message = `Hi! I found this amazing AI tutor for solving doubts - Geni Ma'am! 🎓
+
+She can help with:
+✅ Math, Science, Social Science
+✅ Step-by-step explanations  
+✅ Works in English/Hindi/Hinglish
+✅ Free during beta!
+
+Try it here: ${window.location.origin}/chat
+
+Perfect for Class 6-12 students! 📚`;
+
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
   };
 
   return (
@@ -42,12 +42,11 @@ export default function FinalCTA() {
             Start solving now
           </button>
           <button 
-            className="w-full py-3 border-2 border-white text-white rounded-2xl font-medium hover:bg-white/10 transition-colors min-h-[44px] disabled:opacity-50" 
+            className="w-full py-3 border-2 border-white text-white rounded-2xl font-medium hover:bg-white/10 transition-colors min-h-[44px]" 
             data-testid="button-whatsapp-footer"
             onClick={handleWhatsAppClick}
-            disabled={isLoading}
           >
-            {isLoading ? "Generating..." : "Get WhatsApp link"}
+            Get WhatsApp link
           </button>
         </div>
       </div>
