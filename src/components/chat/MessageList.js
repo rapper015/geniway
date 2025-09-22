@@ -3,7 +3,7 @@
 import React, { forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
 import MessageBubble from '../MessageBubble';
 import QuickRepliesBar from './QuickRepliesBar';
-import { DEFAULT_QUICK_REPLIES } from './QuickRepliesBar';
+import { getQuickReplies } from './QuickRepliesBar';
 
 const MessageList = forwardRef(({ 
   messages, 
@@ -17,7 +17,8 @@ const MessageList = forwardRef(({
   showOnboarding = false,
   onSubjectSelect,
   onNameCapture,
-  onStartChat
+  onStartChat,
+  language = 'english'
 }, ref) => {
   const messagesEndRef = useRef(null);
 
@@ -118,7 +119,7 @@ const MessageList = forwardRef(({
               {isLatestBotMessage && isResponseToUserQuestion && onQuickReplyClick && !hideQuickActions && !isStreaming && (
                 <div className="ml-12">
                   <QuickRepliesBar
-                    replies={DEFAULT_QUICK_REPLIES}
+                    replies={getQuickReplies(language)}
                     onReplySelect={onQuickReplyClick}
                     disabled={isStreaming}
                     fastTrackMode={fastTrackMode}

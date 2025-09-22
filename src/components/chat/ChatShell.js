@@ -14,11 +14,11 @@ import {
 import MessageList from './MessageList';
 import WhatsAppComposer from './WhatsAppComposer';
 import VisionInputModal from './VisionInputModal';
-import { DEFAULT_QUICK_REPLIES } from './QuickRepliesBar';
 import SettingsModal from './SettingsModal';
 import { ProfileCollectionWrapper } from '../ProfileCollectionWrapper';
 import { StepWiseProfileWrapper } from '../StepWiseProfileWrapper';
 import { gtmEvents } from '../../lib/gtm';
+import { getQuickReplies } from './QuickRepliesBar';
 
 export default function ChatShell({ subject, onBack }) {
   const { user, isAuthenticated, isGuest, guestUser } = useAuth();
@@ -1595,8 +1595,9 @@ export default function ChatShell({ subject, onBack }) {
       return;
     }
 
-    // Find the message that corresponds to this action
-    const reply = DEFAULT_QUICK_REPLIES.find(r => r.action === action);
+    // Find the message that corresponds to this action using language-specific quick replies
+    const quickReplies = getQuickReplies(language);
+    const reply = quickReplies.find(r => r.action === action);
     if (!reply) {
       console.warn('Unknown quick reply action:', action);
       return;
@@ -1609,7 +1610,7 @@ export default function ChatShell({ subject, onBack }) {
     if (action === 'confirm_understanding' && !isAuthenticated) {
       handleGotItClick();
     }
-  }, [handleSendMessage, isAuthenticated, fastTrackMode]);
+  }, [handleSendMessage, isAuthenticated, fastTrackMode, language]);
 
   // Handle "Got it" clicks for quiz and progressive profile collection
   const handleGotItClick = useCallback(async () => {
@@ -1827,6 +1828,7 @@ export default function ChatShell({ subject, onBack }) {
           className="pt-20 pb-20"
           ref={messageListRef}
           showOnboarding={showOnboarding}
+          language={language}
         />
 
 

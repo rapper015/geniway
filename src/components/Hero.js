@@ -35,13 +35,13 @@ export default function Hero() {
             >
               Start solving my doubt
             </button>
-            <button 
+            {/* <button 
               className="w-full py-3 border-2 border-white text-white rounded-2xl font-medium hover:bg-white/10 transition-colors min-h-[44px]" 
               data-testid="button-sample"
               onClick={handleSampleClick}
             >
               Try a sample
-            </button>
+            </button> */}
           </div>
         </div>
       </div>
