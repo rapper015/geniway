@@ -210,6 +210,25 @@ export const initializeGTM = () => {
   }
 };
 
+// Debug function to test GTM events
+export const testGTMEvent = () => {
+  if (typeof window !== 'undefined') {
+    console.log('Testing GTM Event...');
+    console.log('DataLayer before:', window.dataLayer);
+    
+    window.dataLayer.push({
+      event: 'test_event',
+      event_category: 'debug',
+      event_label: 'GTM Test',
+      event_action: 'test_gtm_functionality',
+      test_data: 'This is a test event'
+    });
+    
+    console.log('DataLayer after:', window.dataLayer);
+    console.log('GTM Test event pushed successfully!');
+  }
+};
+
 // Declare global dataLayer for TypeScript
 declare global {
   interface Window {
