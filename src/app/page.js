@@ -17,7 +17,6 @@ import SampleBottomSheet from "../components/SampleBottomSheet";
 import RoutingSkeleton from "../components/RoutingSkeleton";
 import AuthModal from "../components/auth/AuthModal";
 import { useAuth } from "../contexts/AuthContext";
-import GTMTestButton from "../components/GTMTestButton";
 
 export default function Home() {
   const [guestUuid, setGuestUuid] = useState(null);
@@ -113,9 +112,6 @@ export default function Home() {
         onClose={() => setIsAuthModalOpen(false)}
         onAuthSuccess={handleAuthSuccess}
       />
-      
-      {/* GTM Test Button - Remove this in production */}
-      <GTMTestButton />
     </div>
   );
 }
