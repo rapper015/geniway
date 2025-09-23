@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import Modal, { ModalHeader, ModalBody, ModalFooter } from '../ui/Modal';
@@ -45,13 +45,15 @@ const languages = [
 ];
 
 export default function SettingsModal({ isOpen, onClose, trigger, localProfileData = {} }) {
-  const { user, isAuthenticated, isGuest, guestUser } = useAuth();
+  const { user, isAuthenticated, isGuest, guestUser, refreshUser } = useAuth();
   const { language, changeLanguage, getLanguageDisplayName } = useLanguage();
   
   const [profile, setProfile] = useState(null);
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const hasLoadedRef = useRef(false);
   const [openSections, setOpenSections] = useState({
     profile: false,
     personalization: false,
@@ -63,7 +65,8 @@ export default function SettingsModal({ isOpen, onClose, trigger, localProfileDa
   // Get effective user ID
   const effectiveUserId = useMemo(() => {
     if (isAuthenticated && user) {
-      return user.id;
+      const userId = user._id || user.id;
+      return userId;
     } else if (isGuest && guestUser) {
       return guestUser.id;
     } else {
@@ -76,35 +79,16 @@ export default function SettingsModal({ isOpen, onClose, trigger, localProfileDa
     }
   }, [isAuthenticated, user, isGuest, guestUser]);
 
-  // Load profile data when modal opens or authentication state changes
-  useEffect(() => {
-    if (isOpen && effectiveUserId) {
-      loadProfile();
-    }
-  }, [isOpen, effectiveUserId, isAuthenticated, user]);
-
-  // Update profile when user authentication state or local profile data changes
-  useEffect(() => {
-    console.log('[SettingsModal] Auth state or profile data changed:', { 
-      isAuthenticated, 
-      hasUser: !!user, 
-      localProfileData 
-    });
-    
-    if (effectiveUserId) {
-      loadProfile();
-    }
-  }, [isAuthenticated, user, localProfileData, effectiveUserId]);
-
-  const loadProfile = async () => {
+  const loadProfile = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     try {
+      
       let profileData = {};
       let userInfo = {};
 
       if (isAuthenticated && user) {
         // Use authenticated user data
-        console.log('[SettingsModal] Loading profile for authenticated user:', user);
         profileData = {
           user_id: user._id || user.id,
           first_name: user.firstName || user.first_name || '',
@@ -139,7 +123,6 @@ export default function SettingsModal({ isOpen, onClose, trigger, localProfileDa
         };
       } else {
         // Use local profile data for guest users
-        console.log('[SettingsModal] Loading profile for guest user with local data:', localProfileData);
         profileData = {
           user_id: effectiveUserId,
           first_name: localProfileData.firstName || '',
@@ -174,19 +157,129 @@ export default function SettingsModal({ isOpen, onClose, trigger, localProfileDa
         };
       }
       
-      console.log('[SettingsModal] Setting profile data:', profileData);
       setProfile(profileData);
       setUserData(userInfo);
       
     } catch (error) {
       console.error('Error loading profile:', error);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
-  };
+  }, [isAuthenticated, user, isGuest, guestUser, effectiveUserId, localProfileData]);
+
+  // Load profile data when modal opens
+  useEffect(() => {
+    if (isOpen && !hasLoadedRef.current) {
+      setLoadError(false); // Reset error state when modal opens
+      hasLoadedRef.current = true;
+      
+      // Load profile directly without calling refreshUser to avoid infinite loop
+      loadProfile();
+    } else if (!isOpen) {
+      hasLoadedRef.current = false;
+    }
+  }, [isOpen]); // Only depend on isOpen to avoid infinite loops
+
+  // Refresh user data when modal opens (only for authenticated users)
+  useEffect(() => {
+    if (isOpen && isAuthenticated && refreshUser) {
+      refreshUser().catch(error => {
+        console.error('[SettingsModal] Error refreshing user data:', error);
+      });
+    }
+  }, [isOpen, isAuthenticated]); // Only depend on isOpen and isAuthenticated
+
+  // Fallback: If profile is still null after modal opens, create basic profile
+  useEffect(() => {
+    if (isOpen && !profile && !loading && !loadError) {
+      
+      let fallbackProfile = {};
+      let fallbackUserInfo = {};
+      
+      if (isAuthenticated && user) {
+        // Create profile from authenticated user data
+        fallbackProfile = {
+          user_id: user._id || user.id,
+          first_name: user.firstName || user.first_name || '',
+          last_name: user.lastName || user.last_name || '',
+          name: user.name || '',
+          preferred_name: user.preferredName || user.preferred_name || '',
+          whatsapp_number: user.whatsappNumber || user.whatsapp_number || '',
+          state: user.state || '',
+          city: user.city || '',
+          board: user.board || 'CBSE',
+          grade: user.grade || null,
+          subjects: user.subjects || [],
+          lang_pref: user.langPref || user.lang_pref || 'en',
+          teaching_language: user.teachingLanguage || user.teaching_language || 'English',
+          pace: user.pace || 'Normal',
+          learning_style: user.learningStyle || user.learning_style || 'Text',
+          learning_styles: user.learningStyles || user.learning_styles || ['Text'],
+          content_mode: user.contentMode || user.content_mode || 'step-by-step',
+          fast_track_enabled: user.fastTrackEnabled || user.fast_track_enabled || false,
+          save_chat_history: user.saveChatHistory !== undefined ? user.saveChatHistory : true,
+          study_streaks_enabled: user.studyStreaksEnabled !== undefined ? user.studyStreaksEnabled : true,
+          break_reminders_enabled: user.breakRemindersEnabled !== undefined ? user.breakRemindersEnabled : true,
+          mastery_nudges_enabled: user.masteryNudgesEnabled !== undefined ? user.masteryNudgesEnabled : true,
+          data_sharing_enabled: user.dataSharingEnabled || user.data_sharing_enabled || false
+        };
+        
+        fallbackUserInfo = {
+          id: user._id || user.id,
+          email: user.email || '',
+          role: user.role || 'student',
+          name: user.name || 'User'
+        };
+      } else {
+        // Create profile from localStorage guest data
+        const guestProfile = JSON.parse(localStorage.getItem('guestProfile') || '{}');
+        const effectiveId = effectiveUserId || 'guest_user';
+        
+        fallbackProfile = {
+          user_id: effectiveId,
+          first_name: guestProfile.firstName || '',
+          last_name: guestProfile.lastName || '',
+          name: guestProfile.name || '',
+          preferred_name: '',
+          whatsapp_number: '',
+          state: guestProfile.state || '',
+          city: guestProfile.city || '',
+          board: guestProfile.board || 'CBSE',
+          grade: guestProfile.grade || null,
+          subjects: guestProfile.subjects || [],
+          lang_pref: 'en',
+          teaching_language: 'English',
+          pace: guestProfile.pace || 'Normal',
+          learning_style: guestProfile.learningStyle || 'Text',
+          learning_styles: guestProfile.learningStyles || ['Text'],
+          content_mode: 'step-by-step',
+          fast_track_enabled: false,
+          save_chat_history: true,
+          study_streaks_enabled: true,
+          break_reminders_enabled: true,
+          mastery_nudges_enabled: true,
+          data_sharing_enabled: false
+        };
+        
+        fallbackUserInfo = {
+          id: effectiveId,
+          email: `${effectiveId}@geniway.com`,
+          role: guestProfile.role || 'student',
+          name: guestProfile.name || 'Guest User'
+        };
+      }
+      
+      setProfile(fallbackProfile);
+      setUserData(fallbackUserInfo);
+      setLoading(false);
+    }
+  }, [isOpen, profile, loading, loadError, isAuthenticated, user, effectiveUserId]);
 
   const saveProfile = async () => {
-    if (!profile) return;
+    if (!profile) {
+      return;
+    }
 
     setSaving(true);
     try {
@@ -194,10 +287,9 @@ export default function SettingsModal({ isOpen, onClose, trigger, localProfileDa
         ...profile,
         ...(userData?.email && { email: userData.email })
       };
-
+      
       // For guest users, just save to localStorage
       if (isGuest || !isAuthenticated) {
-        console.log('[SettingsModal] Saving guest profile to localStorage:', updateData);
         localStorage.setItem('guestProfile', JSON.stringify(updateData));
         
         // Update local state
@@ -209,7 +301,7 @@ export default function SettingsModal({ isOpen, onClose, trigger, localProfileDa
       }
 
       // For authenticated users, make API call
-      console.log('[SettingsModal] Saving authenticated user profile to database:', updateData);
+      
       const response = await fetch(`/api/profile/${effectiveUserId}`, {
         method: 'PATCH',
         headers: {
@@ -220,21 +312,90 @@ export default function SettingsModal({ isOpen, onClose, trigger, localProfileDa
 
       if (response.ok) {
         const data = await response.json();
-        if (data.profile) {
+        
+        // Handle different response formats
+        if (data.profile && data.user) {
+          // Standard format with both profile and user
           setProfile(data.profile);
-        }
-        if (data.user) {
           setUserData(data.user);
+          
+          // Update localStorage with new user data
+          localStorage.setItem('user', JSON.stringify(data.user));
+        } else if (data.user) {
+          // User data now contains all profile information
+          const userData = data.user;
+          setUserData(userData);
+          
+          // Create profile object from user data (for backward compatibility)
+          const profileData = {
+            user_id: userData._id || userData.id,
+            first_name: userData.firstName || '',
+            last_name: userData.lastName || '',
+            name: userData.name || '',
+            preferred_name: userData.preferredName || '',
+            whatsapp_number: userData.whatsappNumber || '',
+            phone_number: userData.phoneNumber || '',
+            state: userData.state || '',
+            city: userData.city || '',
+            school: userData.school || '',
+            board: userData.board || 'CBSE',
+            grade: userData.grade || null,
+            subjects: userData.subjects || [],
+            lang_pref: userData.langPref || 'en',
+            teaching_language: userData.teachingLanguage || 'English',
+            pace: userData.pace || 'Normal',
+            learning_style: userData.learningStyle || 'Text',
+            learning_styles: userData.learningStyles || ['Text'],
+            content_mode: userData.contentMode || 'step-by-step',
+            fast_track_enabled: userData.fastTrackEnabled || false,
+            save_chat_history: userData.saveChatHistory !== false,
+            study_streaks_enabled: userData.studyStreaksEnabled !== false,
+            break_reminders_enabled: userData.breakRemindersEnabled !== false,
+            mastery_nudges_enabled: userData.masteryNudgesEnabled !== false,
+            data_sharing_enabled: userData.dataSharingEnabled || false,
+            is_guest: userData.isGuest || false,
+            age_band: userData.ageBand || '11-14',
+            profile_completion_step: userData.profileCompletionStep || 0,
+            profile_completed: userData.profileCompleted || false,
+            total_questions_asked: userData.totalQuestionsAsked || 0,
+            total_quizzes_completed: userData.totalQuizzesCompleted || 0,
+            average_quiz_score: userData.averageQuizScore || 0,
+            last_active_session: userData.lastActiveSession || new Date(),
+            total_sessions: userData.totalSessions || 0,
+            preferences: userData.preferences || { language: 'en', notifications: true },
+            created_at: userData.createdAt,
+            updated_at: userData.updatedAt
+          };
+          
+          setProfile(profileData);
+          
+          // Update localStorage with new user data
+          localStorage.setItem('user', JSON.stringify(userData));
+        } else {
+          console.error('[SettingsModal] Unexpected API response format:', data);
+          setLoadError(true);
+        }
+        
+        // Refresh user data in AuthContext
+        if (refreshUser) {
+          await refreshUser();
         }
         
         // Show success message
         alert('Settings saved successfully!');
       } else {
-        throw new Error(`Failed to save profile: ${response.status}`);
+        const errorText = await response.text();
+        console.error('[SettingsModal] API error response:', errorText);
+        throw new Error(`Failed to save profile: ${response.status} - ${errorText}`);
       }
     } catch (error) {
-      console.error('Error saving profile:', error);
-      alert('Failed to save settings. Please try again.');
+      console.error('[SettingsModal] Error saving profile:', error);
+      console.error('[SettingsModal] Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      alert(`Failed to save settings: ${error.message}`);
     } finally {
       setSaving(false);
     }
@@ -244,7 +405,6 @@ export default function SettingsModal({ isOpen, onClose, trigger, localProfileDa
     try {
       // For guest users, export from localStorage
       if (isGuest || !isAuthenticated) {
-        console.log('[SettingsModal] Exporting guest data from localStorage');
         const guestProfile = JSON.parse(localStorage.getItem('guestProfile') || '{}');
         const chatHistory = JSON.parse(localStorage.getItem('chatHistory') || '[]');
         
@@ -298,7 +458,6 @@ export default function SettingsModal({ isOpen, onClose, trigger, localProfileDa
     try {
       // For guest users, clear from localStorage
       if (isGuest || !isAuthenticated) {
-        console.log('[SettingsModal] Clearing guest chat history from localStorage');
         localStorage.removeItem('chatHistory');
         localStorage.removeItem('currentSessionId');
         alert('All chat history has been cleared from your local storage.');
@@ -362,31 +521,41 @@ export default function SettingsModal({ isOpen, onClose, trigger, localProfileDa
     }
   };
 
-  if (!profile) {
+  if (!profile && !loading && loadError) {
     return (
       <Modal isOpen={isOpen} onClose={onClose} title="Settings" size="md">
         <ModalBody>
-          {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <p className="text-gray-600 mb-4">Failed to load settings. Please try again.</p>
-              <button 
-                onClick={loadProfile}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Retry
-              </button>
-            </div>
-          )}
+          <div className="text-center py-8">
+            <p className="text-gray-600 mb-4">Failed to load settings. Please try again.</p>
+            <button 
+              onClick={loadProfile}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        </ModalBody>
+      </Modal>
+    );
+  }
+
+  if (!profile && loading) {
+    return (
+      <Modal isOpen={isOpen} onClose={onClose} title="Settings" size="md">
+        <ModalBody>
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
         </ModalBody>
       </Modal>
     );
   }
 
   const getCollapsedSummary = (section) => {
+    if (!profile) {
+      return 'Loading...';
+    }
+    
     switch (section) {
       case 'profile':
         return `${profile.first_name || ''} ${profile.last_name || ''} • Grade ${profile.grade || 'Not set'} • ${profile.board || 'Board not set'} • ${profile.lang_pref || 'English'}`;
@@ -422,7 +591,12 @@ export default function SettingsModal({ isOpen, onClose, trigger, localProfileDa
       </ModalHeader>
 
       <ModalBody>
-        <div className="space-y-6">
+        {!profile ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
+        ) : (
+          <div className="space-y-6">
           {/* Profile Section */}
           <div className="border rounded-lg">
             <button
@@ -935,6 +1109,7 @@ export default function SettingsModal({ isOpen, onClose, trigger, localProfileDa
             )}
           </div>
         </div>
+        )}
       </ModalBody>
 
       <ModalFooter>

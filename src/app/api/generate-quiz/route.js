@@ -75,7 +75,6 @@ Generate a contextual quiz question now:`;
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const jsonString = jsonMatch[0];
-        console.log('[generate-quiz] Extracted JSON string:', jsonString);
         quizData = JSON.parse(jsonString);
       } else {
         throw new Error('No JSON found in response');
@@ -102,7 +101,6 @@ Generate a contextual quiz question now:`;
             correct: parseInt(correctMatch[1]),
             explanation: explanationMatch ? explanationMatch[1] : "This question tests your understanding of the concept."
           };
-          console.log('[generate-quiz] Successfully parsed quiz data manually');
         } else {
           throw new Error('Could not extract quiz data manually');
         }

@@ -17,7 +17,7 @@ export function AuthProvider({ children }) {
     const token = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
     
-    console.log('AuthContext: Initializing with token:', !!token, 'userData:', !!userData);
+    // console.log('AuthContext: Initializing with token:', !!token, 'userData:', !!userData);
     
     if (token && userData) {
       try {
@@ -25,6 +25,9 @@ export function AuthProvider({ children }) {
         console.log('AuthContext: Setting user from localStorage:', parsedUser);
         setUser(parsedUser);
         setGuestUser(null);
+        
+        // Refresh user data from server to get latest information
+        refreshUserData(token, parsedUser._id || parsedUser.id);
       } catch (error) {
         console.error('Error parsing user data:', error);
         localStorage.removeItem('token');
@@ -33,12 +36,43 @@ export function AuthProvider({ children }) {
     } else {
       // Initialize guest user if no authenticated user
       const guest = guestUserManager.getGuestUser();
-      console.log('AuthContext: Setting guest user:', guest);
+      // console.log('AuthContext: Setting guest user:', guest);
       setGuestUser(guest);
     }
     
     setLoading(false);
   }, []);
+
+  // Function to refresh user data from server
+  const refreshUserData = async (token, userId) => {
+    try {
+      console.log('AuthContext: Refreshing user data from server for userId:', userId);
+      
+      const response = await fetch(`/api/profile/${userId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('AuthContext: Refreshed user data from server:', data);
+        
+        if (data.user) {
+          // Update user data in localStorage and state
+          localStorage.setItem('user', JSON.stringify(data.user));
+          setUser(data.user);
+          console.log('AuthContext: User data updated successfully');
+        }
+      } else {
+        console.warn('AuthContext: Failed to refresh user data, using cached data');
+      }
+    } catch (error) {
+      console.error('AuthContext: Error refreshing user data:', error);
+    }
+  };
 
   // Listen for cross-window authentication changes
   useEffect(() => {
@@ -133,11 +167,26 @@ export function AuthProvider({ children }) {
     setGuestUser(guest);
   };
 
+  const refreshUser = async () => {
+    const token = localStorage.getItem('token');
+    const userData = localStorage.getItem('user');
+    
+    if (token && userData) {
+      try {
+        const parsedUser = JSON.parse(userData);
+        await refreshUserData(token, parsedUser._id || parsedUser.id);
+      } catch (error) {
+        console.error('AuthContext: Error refreshing user:', error);
+      }
+    }
+  };
+
   const value = {
     user,
     guestUser,
     login,
     logout,
+    refreshUser,
     loading,
     isAuthenticated: !!user,
     isGuest: !!guestUser && !user,
@@ -145,12 +194,12 @@ export function AuthProvider({ children }) {
     guestUserManager
   };
 
-  console.log('AuthContext: Providing value:', { 
-    user: !!user, 
-    isAuthenticated: !!user, 
-    isGuest: !!guestUser && !user,
-    loading 
-  });
+  // console.log('AuthContext: Providing value:', { 
+  //   user: !!user, 
+  //   isAuthenticated: !!user, 
+  //   isGuest: !!guestUser && !user,
+  //   loading 
+  // });
 
   return (
     <AuthContext.Provider value={value}>

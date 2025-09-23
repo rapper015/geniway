@@ -5,7 +5,6 @@ import jwt from 'jsonwebtoken';
 
 export async function POST(request) {
   try {
-    console.log('[auto-register] API called');
     const { 
       firstName, 
       lastName, 
@@ -31,7 +30,6 @@ export async function POST(request) {
       isGuest = true 
     } = await request.json();
     
-    console.log('[auto-register] Request data:', { firstName, lastName, email, role, isGuest });
 
     if (!firstName || !lastName || !role) {
       return NextResponse.json(
@@ -49,7 +47,6 @@ export async function POST(request) {
     }
 
     await connectDB();
-    console.log('[auto-register] Database connected');
 
     // Convert grade to number if it's a string
     const convertGradeToNumber = (gradeValue) => {
@@ -64,12 +61,10 @@ export async function POST(request) {
     };
 
     const numericGrade = convertGradeToNumber(grade);
-    console.log('[auto-register] Grade conversion:', { original: grade, converted: numericGrade });
 
     // Use provided email or create a temporary email for guest users
     const userEmail = email || `guest_${Date.now()}@geniway.local`;
     const fullName = `${firstName} ${lastName}`;
-    console.log('[auto-register] Creating user with email:', userEmail);
 
     // Create new user with comprehensive profile
     const user = new User({
@@ -114,9 +109,7 @@ export async function POST(request) {
       }
     });
 
-    console.log('[auto-register] Saving user to database');
     await user.save();
-    console.log('[auto-register] User saved successfully with ID:', user._id);
 
     // Generate JWT token
     const token = jwt.sign(

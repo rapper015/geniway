@@ -33,13 +33,11 @@ export default function Home() {
         
         if (existingGuestUuid) {
           setGuestUuid(existingGuestUuid);
-          console.log('[Home] Returning guest session loaded:', existingGuestUuid);
         } else {
           // Create new guest UUID
           const newGuestUuid = `guest_${Date.now()}`;
           localStorage.setItem('guest_uuid', newGuestUuid);
           setGuestUuid(newGuestUuid);
-          console.log('[Home] New guest session created:', newGuestUuid);
         }
         
         setIsGuestSessionInitialized(true);

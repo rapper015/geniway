@@ -44,7 +44,6 @@ export async function POST(request) {
     };
 
     const numericGrade = convertGradeToNumber(grade);
-    console.log('[register] Grade conversion:', { original: grade, converted: numericGrade });
 
     // Check if user already exists
     const existingUser = await User.findOne({ email: email.toLowerCase() });
@@ -55,14 +54,48 @@ export async function POST(request) {
       );
     }
 
-    // Create new user
+    // Create new user with comprehensive profile data
     const userData = new User({
       email: email.toLowerCase(),
       password,
       name,
+      firstName: name.split(' ')[0] || '',
+      lastName: name.split(' ').slice(1).join(' ') || '',
       role: role || 'student',
       grade: numericGrade,
-      school
+      school,
+      // Default profile settings
+      board: 'CBSE',
+      subjects: [],
+      state: '',
+      city: '',
+      langPref: 'en',
+      teachingLanguage: 'English',
+      pace: 'Normal',
+      learningStyle: 'Text',
+      learningStyles: ['Text'],
+      contentMode: 'step-by-step',
+      fastTrackEnabled: false,
+      saveChatHistory: true,
+      studyStreaksEnabled: true,
+      breakRemindersEnabled: true,
+      masteryNudgesEnabled: true,
+      dataSharingEnabled: false,
+      ageBand: numericGrade && numericGrade <= 8 ? '6-10' : numericGrade && numericGrade <= 10 ? '11-14' : '15-18',
+      // Profile completion tracking
+      profileCompletionStep: 3, // Basic profile completed
+      profileCompleted: false,
+      // Learning analytics
+      totalQuestionsAsked: 0,
+      totalQuizzesCompleted: 0,
+      averageQuizScore: 0,
+      // Session information
+      lastActiveSession: new Date(),
+      totalSessions: 1,
+      preferences: {
+        language: 'en',
+        notifications: true
+      }
     });
 
     // Save user to database (password will be hashed automatically by pre-save hook)

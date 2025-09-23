@@ -92,7 +92,6 @@ export function ProfileCollectionProvider({ children }) {
 
   const submitStepData = async (stepData) => {
     try {
-      console.log('[ProfileCollectionContext] submitStepData called:', { stepData, currentStep, onStepComplete });
       
       // For 'complete' step, stepData is the complete profile
       if (currentStep === 'complete') {
@@ -101,10 +100,7 @@ export function ProfileCollectionProvider({ children }) {
         
         // Call the completion callback if provided
         if (onStepComplete) {
-          console.log('[ProfileCollectionContext] Calling complete step callback:', { currentStep, stepData });
           onStepComplete(currentStep, stepData);
-        } else {
-          console.log('[ProfileCollectionContext] No onStepComplete callback provided for complete step');
         }
         
         return true;
@@ -126,10 +122,7 @@ export function ProfileCollectionProvider({ children }) {
       
       // Call the completion callback if provided and we have a valid step
       if (onStepComplete && currentStep) {
-        console.log('[ProfileCollectionContext] Calling step completion callback:', { currentStep, stepData });
         onStepComplete(currentStep, stepData);
-      } else {
-        console.log('[ProfileCollectionContext] Not calling callback:', { onStepComplete: !!onStepComplete, currentStep });
       }
       
       return true;

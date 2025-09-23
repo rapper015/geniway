@@ -32,14 +32,12 @@ export default function ChatShell({ subject, onBack }) {
 
   // Complete profile collection and create account
   const completeProfileCollection = useCallback(async (finalProfile) => {
-    console.log('[ChatShell] completeProfileCollection called with:', finalProfile);
     
     // Save final profile
     localStorage.setItem('guestProfile', JSON.stringify(finalProfile));
     
     // Create account automatically
     try {
-      console.log('[ChatShell] Making API call to /api/auth/auto-register');
       const response = await fetch('/api/auth/auto-register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -69,11 +67,9 @@ export default function ChatShell({ subject, onBack }) {
         })
       });
 
-      console.log('[ChatShell] API response status:', response.status);
       
       if (response.ok) {
         const data = await response.json();
-        console.log('[ChatShell] API response data:', data);
         
             // Success message
             const successMessage = {
@@ -126,11 +122,9 @@ export default function ChatShell({ subject, onBack }) {
 
   // Acknowledgment callback for step completion
   const handleStepComplete = useCallback(async (step, data) => {
-    console.log('[ChatShell] handleStepComplete called with:', { step, data });
     
     // Only send acknowledgment if we have a valid step
     if (!step || step === null || step === undefined) {
-      console.log('[ChatShell] No valid step provided, skipping acknowledgment');
       return;
     }
 
@@ -175,21 +169,17 @@ export default function ChatShell({ subject, onBack }) {
           return null; // Don't send acknowledgment message, account creation will handle it
         
         default:
-          console.log('[ChatShell] Unknown step:', step);
           return null; // Don't send message for unknown steps
       }
     };
 
     // Handle password step - automatically trigger complete step
     if (step === 'password') {
-      console.log('[ChatShell] Password step completed, triggering complete step');
       // Get the updated profile with password
       const updatedProfile = JSON.parse(localStorage.getItem('guestProfile') || '{}');
-      console.log('[ChatShell] Updated profile with password:', updatedProfile);
       
       // Trigger complete step immediately
       setTimeout(() => {
-        console.log('[ChatShell] Triggering complete step modal');
         triggerStepModal('complete', updatedProfile);
       }, 500); // Small delay to ensure password is saved
       return;
@@ -197,10 +187,8 @@ export default function ChatShell({ subject, onBack }) {
 
     // Handle complete step separately (account creation)
     if (step === 'complete') {
-      console.log('[ChatShell] Handling complete step - creating account with data:', data);
       try {
         await completeProfileCollection(data);
-        console.log('[ChatShell] Account creation completed successfully');
       } catch (error) {
         console.error('[ChatShell] Error creating account:', error);
         // Add error message
@@ -236,14 +224,12 @@ export default function ChatShell({ subject, onBack }) {
 
   // Set up the step completion callback
   useEffect(() => {
-    console.log('[ChatShell] Setting up step completion callback');
     setOnStepComplete(handleStepComplete);
   }, [setOnStepComplete, handleStepComplete]);
 
   // Debug: Log when complete step modal is triggered
   useEffect(() => {
     if (currentStep === 'complete') {
-      console.log('[ChatShell] Complete step modal is now open');
     }
   }, [currentStep]);
 
@@ -255,7 +241,6 @@ export default function ChatShell({ subject, onBack }) {
         const parsedMessages = JSON.parse(savedMessages);
         if (parsedMessages.length > 0) {
           setMessages(parsedMessages);
-          console.log('[ChatShell] Loaded', parsedMessages.length, 'messages from localStorage');
         }
       } catch (error) {
         console.error('[ChatShell] Error loading messages from localStorage:', error);
@@ -267,7 +252,6 @@ export default function ChatShell({ subject, onBack }) {
   useEffect(() => {
     if (messages.length > 0) {
       localStorage.setItem('chatHistory', JSON.stringify(messages));
-      console.log('[ChatShell] Saved', messages.length, 'messages to localStorage');
     }
   }, [messages]);
   const [mode, setMode] = useState('step-by-step');
@@ -283,13 +267,11 @@ export default function ChatShell({ subject, onBack }) {
   const [profileData, setProfileData] = useState(() => {
     // Initialize with existing localStorage data
     const existingProfile = JSON.parse(localStorage.getItem('guestProfile') || '{}');
-    console.log('[ChatShell] Initializing profile data:', existingProfile);
     return existingProfile;
   });
   
   // Debug: Log profile data changes
   useEffect(() => {
-    console.log('[ChatShell] Profile data updated:', profileData);
   }, [profileData]);
   const [gotItCount, setGotItCount] = useState(0);
   const [waitingForProfileResponse, setWaitingForProfileResponse] = useState(false);
@@ -307,16 +289,13 @@ export default function ChatShell({ subject, onBack }) {
 
   // Initialize user ID
   useEffect(() => {
-    console.log('[ChatShell] Initializing user ID:', { isAuthenticated, user, isGuest, guestUser });
     
     if (isAuthenticated && user) {
       // Use user._id if available (from database), otherwise use user.id
       const userIdToSet = user._id || user.id;
       setUserId(userIdToSet);
-      console.log('[ChatShell] Set userId from authenticated user:', userIdToSet);
     } else if (isGuest && guestUser) {
       setUserId(guestUser.id);
-      console.log('[ChatShell] Set userId from guest user:', guestUser.id);
     } else {
       // Check if user data exists in localStorage (after account creation)
       const storedUser = localStorage.getItem('user');
@@ -325,7 +304,6 @@ export default function ChatShell({ subject, onBack }) {
           const userData = JSON.parse(storedUser);
           const userIdToSet = userData._id || userData.id;
           setUserId(userIdToSet);
-          console.log('[ChatShell] Using stored user ID:', userIdToSet, 'from userData:', userData);
         } catch (error) {
           console.error('[ChatShell] Error parsing stored user:', error);
         }
@@ -338,12 +316,10 @@ export default function ChatShell({ subject, onBack }) {
         localStorage.setItem('guest_uuid', guestUuid);
       }
       setUserId(guestUuid);
-      console.log('[ChatShell] Set userId from guest UUID:', guestUuid);
     }
   }, [isAuthenticated, user, isGuest, guestUser]);
 
   const addWelcomeMessage = useCallback(() => {
-    console.log('[ChatShell] addWelcomeMessage called with subject:', subject);
     const subjectMessages = {
       'mathematics': "Hi! I'm Geni Ma'am, your Math tutor. I'm here to help you with all your Math doubts. What would you like to learn today?",
       'science': "Hi! I'm Geni Ma'am, your Science tutor. I'm here to help you with Physics, Chemistry, and Biology. What's your doubt in Science?",
@@ -362,7 +338,6 @@ export default function ChatShell({ subject, onBack }) {
       subject: subject
     };
 
-    console.log('[ChatShell] Setting welcome message:', aiMessage);
     setMessages([aiMessage]);
     setShowOnboarding(false); // Hide onboarding screen to show the welcome message
   }, [subject]);
@@ -370,7 +345,6 @@ export default function ChatShell({ subject, onBack }) {
   // Add subject-specific welcome message immediately when component mounts
   useEffect(() => {
     if (subject && messages.length === 0) {
-      console.log('[ChatShell] Adding welcome message for subject:', subject);
       addWelcomeMessage();
     }
   }, [subject, messages.length, addWelcomeMessage]);
@@ -393,7 +367,6 @@ export default function ChatShell({ subject, onBack }) {
   useEffect(() => {
     return () => {
       if (currentSSERef.current) {
-        console.log('[ChatShell] Cleaning up SSE connection on unmount');
         currentSSERef.current.close();
         currentSSERef.current = null;
       }
@@ -425,26 +398,16 @@ export default function ChatShell({ subject, onBack }) {
 
   // Debug: Log state changes
   useEffect(() => {
-    console.log('[ChatShell] State changed:', {
-      hideQuickActions,
-      isStreaming,
-      messagesCount: messages.length,
-      lastMessage: messages[messages.length - 1] ? {
-        type: messages[messages.length - 1].type,
-        id: messages[messages.length - 1].id,
-        content: messages[messages.length - 1].content?.substring(0, 50)
-      } : null
-    });
   }, [hideQuickActions, isStreaming, messages]);
 
   // Generate contextual quiz question based on AI's response content
   const generateQuizQuestion = useCallback(async (subject, recentMessages, originalUserQuestion) => {
     try {
+      
       // Find the AI's response content from recent messages
       const aiResponse = recentMessages.find(msg => msg.type === 'ai' && msg.content);
       const userQuestion = recentMessages.find(msg => msg.type === 'user')?.content || originalUserQuestion || 'general topic';
       
-      console.log('[ChatShell] Generating contextual quiz for:', { subject, userQuestion, hasAiResponse: !!aiResponse });
       
       if (!aiResponse) {
         console.warn('[ChatShell] No AI response found for quiz generation');
@@ -462,25 +425,29 @@ export default function ChatShell({ subject, onBack }) {
         };
       }
       
-      console.log('[ChatShell] Using AI response for quiz:', aiResponse.content.substring(0, 100));
       
       // Call the AI to generate a contextual quiz question based on the AI's response
+      const requestBody = {
+        subject: subject,
+        originalQuestion: userQuestion,
+        aiResponse: aiResponse.content, // Pass the AI's actual response
+        context: recentMessages.slice(-3).map(m => `${m.type}: ${m.content}`).join('\n')
+      };
+      
+      
       const response = await fetch('/api/generate-quiz', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          subject: subject,
-          originalQuestion: userQuestion,
-          aiResponse: aiResponse.content, // Pass the AI's actual response
-          context: recentMessages.slice(-3).map(m => `${m.type}: ${m.content}`).join('\n')
-        })
+        body: JSON.stringify(requestBody)
       });
 
+      
       if (response.ok) {
         const quizData = await response.json();
-        console.log('[ChatShell] Generated contextual quiz:', quizData);
         return quizData;
       } else {
+        const errorText = await response.text();
+        console.error('[ChatShell] Quiz generation failed:', response.status, response.statusText, errorText);
         throw new Error('Failed to generate quiz');
       }
     } catch (error) {
@@ -503,8 +470,6 @@ export default function ChatShell({ subject, onBack }) {
 
   // Handle message sending with proper session management and error handling
   const handleSendMessage = useCallback(async (text, type = "text", metadata = {}) => {
-    console.log('[ChatShell] handleSendMessage called:', { text, type, currentSessionId });
-    console.log('[ChatShell] Function called with params:', { text, type, metadata });
 
     // Track chat message sent event
     gtmEvents.chatMessageSent(type, currentSessionId, userId);
@@ -517,19 +482,16 @@ export default function ChatShell({ subject, onBack }) {
 
     // Handle quiz responses (only if we're actively in quiz mode)
     if (waitingForQuizResponse && quizStep && quizStep !== null) {
-      console.log('[ChatShell] Quiz active, handling response:', { text, quizStep, waitingForQuizResponse });
       await handleQuizResponse(text);
       return;
     }
 
     // Handle profile collection responses (only if we're actively collecting profile data)
     if (waitingForProfileResponse && profileStep && profileStep !== null) {
-      console.log('[ChatShell] Profile collection active, handling response:', { text, profileStep, waitingForProfileResponse });
       await handleProfileResponse(text);
       return;
     }
     
-    console.log('[ChatShell] Normal message flow:', { text, waitingForProfileResponse, profileStep, isAuthenticated });
 
     // Hide onboarding when user sends first message
     if (showOnboarding) {
@@ -538,7 +500,6 @@ export default function ChatShell({ subject, onBack }) {
 
     // Prevent double execution during any async operation
     if (isStreaming) {
-      console.log('[ChatShell] Operation in progress, ignoring duplicate call');
       return;
     }
 
@@ -547,7 +508,6 @@ export default function ChatShell({ subject, onBack }) {
     const sessionKey = currentSessionId || 'creating';
     const callKey = `${text}-${type}-${sessionKey}`;
     if (lastCallRef.current && lastCallRef.current.key === callKey && now - lastCallRef.current.time < 3000) {
-      console.log('[ChatShell] Duplicate call detected, ignoring');
       return;
     }
     lastCallRef.current = { key: callKey, time: now };
@@ -566,8 +526,6 @@ export default function ChatShell({ subject, onBack }) {
     // Add message to UI immediately - this happens first for instant feedback
     setMessages(prev => {
       const newMessages = [...prev, userMessage];
-      console.log('[ChatShell] Added user message:', userMessage);
-      console.log('[ChatShell] Total messages:', newMessages.length);
       return newMessages;
     });
     
@@ -580,14 +538,6 @@ export default function ChatShell({ subject, onBack }) {
     // Handle session creation in background - don't block UI
     let sessionId = currentSessionId;
     if (!sessionId) {
-      console.log('[ChatShell] No current session, creating new one in background...');
-      console.log('[ChatShell] Session creation data:', { 
-        userId, 
-        userIdType: typeof userId,
-        subject: subject || detectSubject(text),
-        isAuthenticated,
-        isGuest: !isAuthenticated 
-      });
       
       // Create session asynchronously without blocking UI
       const createSession = async () => {
@@ -605,11 +555,9 @@ export default function ChatShell({ subject, onBack }) {
           if (response.ok) {
             const session = await response.json();
             sessionId = session.sessionId;
-            console.log('[ChatShell] Session created:', { sessionId, session });
             setCurrentSessionId(sessionId);
             
             // Start streaming after session is created
-            console.log('[ChatShell] Starting streaming with new sessionId:', sessionId);
             streamRealAIResponse(text, type === "image" ? metadata?.imageUrl : undefined, sessionId);
           } else {
             throw new Error('Failed to create session');
@@ -632,9 +580,7 @@ export default function ChatShell({ subject, onBack }) {
       // Start session creation in background
       createSession();
     } else {
-      console.log('[ChatShell] Using existing session:', sessionId);
       // Stream real AI response from orchestrator immediately
-      console.log('[ChatShell] Starting streaming with existing sessionId:', sessionId);
       streamRealAIResponse(text, type === "image" ? metadata?.imageUrl : undefined, sessionId);
     }
   }, [currentSessionId, isStreaming, showOnboarding, subject, userId, isAuthenticated, waitingForProfileResponse, profileStep, waitingForQuizResponse, quizStep]);
@@ -661,7 +607,6 @@ export default function ChatShell({ subject, onBack }) {
 
   // Handle profile collection responses
   const handleProfileResponse = useCallback(async (response) => {
-    console.log('[ChatShell] handleProfileResponse called:', { response, profileStep, profileData });
     
     const userMessage = {
       id: `user-${Date.now()}`,
@@ -674,7 +619,6 @@ export default function ChatShell({ subject, onBack }) {
     setMessages(prev => [...prev, userMessage]);
 
     if (profileStep === 'name') {
-      console.log('[ChatShell] Processing name step');
       const nameParts = response.trim().split(' ');
       
       if (nameParts.length >= 2) {
@@ -706,7 +650,6 @@ export default function ChatShell({ subject, onBack }) {
         setProfileStep(null);
         setWaitingForProfileResponse(false);
         setProfileData({});
-        console.log('[ChatShell] Name collection complete, encouraging next question');
       } else {
         // User provided only first name
         const firstName = nameParts[0];
@@ -734,7 +677,6 @@ export default function ChatShell({ subject, onBack }) {
         setProfileStep(null);
         setWaitingForProfileResponse(false);
         setProfileData({});
-        console.log('[ChatShell] First name collected, encouraging next question');
       }
       
     } else if (profileStep === 'role_grade') {
@@ -1620,51 +1562,81 @@ export default function ChatShell({ subject, onBack }) {
     // Send the predefined message
     handleSendMessage(reply.message, "text");
 
-    // Trigger progressive profile collection for guest users on "Got it"
-    if (action === 'confirm_understanding' && !isAuthenticated) {
+    // Trigger quiz generation for all users on "Got it"
+    if (action === 'confirm_understanding' || action === 'got_it') {
       handleGotItClick();
     }
   }, [handleSendMessage, isAuthenticated, fastTrackMode, language]);
 
   // Handle "Got it" clicks for quiz and progressive profile collection
   const handleGotItClick = useCallback(async () => {
-    console.log('[ChatShell] handleGotItClick called:', { gotItCount, isAuthenticated });
+    console.log('[ChatShell] handleGotItClick called:', { 
+      gotItCount, 
+      isAuthenticated, 
+      quizCompletedForCurrentQuestion,
+      messagesLength: messages.length 
+    });
     const newGotItCount = gotItCount + 1;
     setGotItCount(newGotItCount);
 
     // Check existing profile data
     const existingProfile = JSON.parse(localStorage.getItem('guestProfile') || '{}');
     
-    // Only show quiz if not already completed for current question (for guest users)
-    if (!isAuthenticated && !quizCompletedForCurrentQuestion) {
+    // Only show quiz if not already completed for current question
+    console.log('[ChatShell] Quiz condition check:', { 
+      quizCompletedForCurrentQuestion, 
+      willShowQuiz: !quizCompletedForCurrentQuestion 
+    });
+    
+    if (!quizCompletedForCurrentQuestion) {
       // Find the user's original question from recent messages
       const userQuestion = messages.find(msg => msg.type === 'user')?.content;
       
       // Generate contextual quiz question
+      console.log('[ChatShell] Calling generateQuizQuestion with:', { subject, userQuestion, messagesCount: messages.length });
       const quiz = await generateQuizQuestion(subject, messages, userQuestion);
-      setCurrentQuiz(quiz);
-      setQuizStep('question');
-      setWaitingForQuizResponse(true);
+      console.log('[ChatShell] Generated quiz:', quiz);
       
-      // Create quiz message with options
-      const quizMessage = {
-        id: `quiz-${Date.now()}`,
-        content: `**❓ Quick Check**\n\nGreat! Let me test your understanding with a quick question:\n\n**${quiz.question}**`,
-        type: 'ai',
-        messageType: 'quiz',
-        timestamp: new Date(),
-        subject: subject,
-        quizData: {
-          question: quiz.question,
-          options: quiz.options,
-          correct: quiz.correct,
-          explanation: quiz.explanation
-        }
-      };
-      
-      setMessages(prev => [...prev, quizMessage]);
+      if (quiz && quiz.question) {
+        setCurrentQuiz(quiz);
+        setQuizStep('question');
+        setWaitingForQuizResponse(true);
+        console.log('[ChatShell] Quiz state set successfully');
+        
+        // Create quiz message with options
+        const quizMessage = {
+          id: `quiz-${Date.now()}`,
+          content: `**❓ Quick Check**\n\nGreat! Let me test your understanding with a quick question:\n\n**${quiz.question}**`,
+          type: 'ai',
+          messageType: 'quiz',
+          timestamp: new Date(),
+          subject: subject,
+          quizData: {
+            question: quiz.question,
+            options: quiz.options,
+            correct: quiz.correct,
+            explanation: quiz.explanation
+          }
+        };
+        
+        setMessages(prev => [...prev, quizMessage]);
+      } else {
+        console.error('[ChatShell] Quiz generation failed or returned invalid data:', quiz);
+        
+        // Fallback: show acknowledgment message if quiz generation fails
+        const ackMessage = {
+          id: `ack-${Date.now()}`,
+          content: "Great! If you have any more questions, feel free to ask!",
+          type: 'ai',
+          messageType: 'text',
+          timestamp: new Date(),
+          subject: subject
+        };
+        
+        setMessages(prev => [...prev, ackMessage]);
+      }
     } else {
-      // For authenticated users or if quiz already completed, just acknowledge
+      // If quiz already completed, just acknowledge
       const ackMessage = {
         id: `ack-${Date.now()}`,
         content: "Great! If you have any more questions, feel free to ask!",

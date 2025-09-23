@@ -21,7 +21,6 @@ export class ContextRecovery {
     this.recoveryAttempts.set(attemptKey, attempts + 1);
 
     try {
-      console.log(`[ContextRecovery] Attempting recovery for session ${sessionId} (attempt ${attempts + 1})`);
       
       // Wait before retry
       await this.delay(this.recoveryDelay * (attempts + 1));
@@ -30,7 +29,6 @@ export class ContextRecovery {
       const recoveredContext = await this.recoverFromDatabase(sessionId, userId, subject);
       
       if (recoveredContext) {
-        console.log(`[ContextRecovery] Successfully recovered context for session ${sessionId}`);
         this.recoveryAttempts.delete(attemptKey);
         return recoveredContext;
       }
@@ -39,14 +37,12 @@ export class ContextRecovery {
       const localContext = await this.recoverFromLocalStorage(sessionId, userId, subject);
       
       if (localContext) {
-        console.log(`[ContextRecovery] Recovered context from local storage for session ${sessionId}`);
         this.recoveryAttempts.delete(attemptKey);
         return localContext;
       }
 
       // Create minimal context as last resort
       const minimalContext = this.createMinimalContext(sessionId, userId, subject);
-      console.log(`[ContextRecovery] Created minimal context for session ${sessionId}`);
       return minimalContext;
 
     } catch (error) {
@@ -205,7 +201,6 @@ export class ContextRecovery {
           localStorage.removeItem(key);
         });
 
-        console.log(`[ContextRecovery] Cleaned up ${toRemove.length} old contexts`);
       }
 
     } catch (error) {

@@ -752,14 +752,12 @@ export function CompleteStepModal({ isOpen, onClose, onSubmit, userData = {} }) 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('[CompleteStepModal] handleSubmit called');
     setIsCreating(true);
     
     try {
       // Get the complete profile data
       const existingProfile = JSON.parse(localStorage.getItem('guestProfile') || '{}');
       const completeProfile = { ...existingProfile, ...userData };
-      console.log('[CompleteStepModal] Complete profile data:', completeProfile);
       
       // Map profile data to valid enum values
       const validSubjects = ['Mathematics', 'Physics', 'Chemistry', 'Biology', 'English', 'Hindi', 'Social Science', 'Computer Science', 'Sanskrit'];
@@ -815,19 +813,15 @@ export function CompleteStepModal({ isOpen, onClose, onSubmit, userData = {} }) 
       };
 
       // Make API call directly for account creation
-      console.log('[CompleteStepModal] Making API call to /api/auth/auto-register');
-      console.log('[CompleteStepModal] Request data:', requestData);
       const response = await fetch('/api/auth/auto-register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestData)
       });
 
-      console.log('[CompleteStepModal] API response status:', response.status);
       
       if (response.ok) {
         const data = await response.json();
-        console.log('[CompleteStepModal] API response data:', data);
         
         // Store user data and token
         localStorage.setItem('user', JSON.stringify(data.user));
@@ -839,11 +833,9 @@ export function CompleteStepModal({ isOpen, onClose, onSubmit, userData = {} }) 
         
         // Save current chat history to localStorage before account creation
         const currentChat = JSON.parse(localStorage.getItem('chatHistory') || '[]');
-        console.log('[CompleteStepModal] Saving chat history to localStorage:', currentChat.length, 'messages');
         
         // Save chat history to database
         try {
-          console.log('[CompleteStepModal] Saving chat history to database');
           const chatResponse = await fetch('/api/chat/save-history', {
             method: 'POST',
             headers: {
@@ -857,7 +849,6 @@ export function CompleteStepModal({ isOpen, onClose, onSubmit, userData = {} }) 
           });
           
           if (chatResponse.ok) {
-            console.log('[CompleteStepModal] Chat history saved to database successfully');
           } else {
             console.error('[CompleteStepModal] Failed to save chat history to database');
           }

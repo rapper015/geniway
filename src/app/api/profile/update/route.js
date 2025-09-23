@@ -28,7 +28,6 @@ export async function PUT(request) {
     }
 
     const profileData = await request.json();
-    console.log('[Profile Update] Received data:', profileData);
 
     await connectDB();
 
@@ -54,7 +53,6 @@ export async function PUT(request) {
     if (profileData.email) updateFields.email = profileData.email.toLowerCase();
     if (profileData.preferences) updateFields.preferences = profileData.preferences;
 
-    console.log('[Profile Update] Update fields:', updateFields);
 
     // Update user
     const updatedUser = await User.findByIdAndUpdate(

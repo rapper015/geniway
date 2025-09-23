@@ -8,7 +8,7 @@ const openai = new OpenAI({
 export class OpenAIService {
   constructor() {
     this.model = 'gpt-4o'; // GPT-4 with vision support
-    this.maxTokens = 2000;
+    this.maxTokens = 4000; // Increased from 2000 to allow longer responses
     this.temperature = 0.7;
   }
 

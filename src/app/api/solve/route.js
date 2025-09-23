@@ -11,7 +11,6 @@ export async function POST(request) {
     const body = await request.json();
     const { sessionId, message, messageType = 'text', imageUrl, userId, guestProfile, language } = body;
     
-    console.log('[API /solve] Received language:', language);
 
     if (!sessionId || !message) {
       return NextResponse.json(
@@ -135,7 +134,6 @@ export async function POST(request) {
     const userId = searchParams.get('userId');
     const language = searchParams.get('language');
     
-    console.log('[API /solve GET] Received language:', language);
 
     if (!sessionId || !message) {
       return NextResponse.json(

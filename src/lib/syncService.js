@@ -77,14 +77,12 @@ export class SyncService {
     }
 
     this.syncInProgress = true;
-    console.log('[SyncService] Processing sync queue:', this.syncQueue.length, 'items');
 
     while (this.syncQueue.length > 0) {
       const item = this.syncQueue.shift();
       
       try {
         await this.executeSyncItem(item);
-        console.log('[SyncService] Successfully synced item:', item.id);
       } catch (error) {
         console.error('[SyncService] Failed to sync item:', item.id, error);
         
@@ -221,44 +219,37 @@ export class SyncService {
   // Comprehensive user data sync
   async syncUserData() {
     if (!this.isOnline) {
-      console.log('[SyncService] Offline, skipping sync');
       return;
     }
 
     const token = localStorage.getItem('token');
     if (!token) {
-      console.log('[SyncService] No token, skipping sync');
       return;
     }
 
     try {
-      console.log('[SyncService] Starting comprehensive user data sync');
       
       // 1. Sync profile data
       const profileData = this.getLocalProfileData();
       if (profileData && Object.keys(profileData).length > 0) {
         await this.syncProfileToDB(profileData);
-        console.log('[SyncService] Profile data synced');
       }
 
       // 2. Sync chat history
       const chatHistory = this.getLocalChatHistory();
       if (chatHistory && chatHistory.length > 0) {
         await this.syncMessageToDB({ messages: chatHistory });
-        console.log('[SyncService] Chat history synced');
       }
 
       // 3. Sync user stats
       const userStats = this.getLocalUserStats();
       if (userStats && Object.keys(userStats).length > 0) {
         await this.syncStatsToDB(userStats);
-        console.log('[SyncService] User stats synced');
       }
 
       // 4. Fetch latest data from server
       await this.fetchLatestUserData();
       
-      console.log('[SyncService] Comprehensive sync completed');
     } catch (error) {
       console.error('[SyncService] Sync failed:', error);
     }
@@ -321,7 +312,6 @@ export class SyncService {
       if (userResponse.ok) {
         const userData = await userResponse.json();
         localStorage.setItem('user', JSON.stringify(userData.user));
-        console.log('[SyncService] Latest user data fetched and stored');
       }
 
       // Fetch latest chat history
@@ -334,7 +324,6 @@ export class SyncService {
       if (chatResponse.ok) {
         const chatData = await chatResponse.json();
         localStorage.setItem('chatHistory', JSON.stringify(chatData.messages || []));
-        console.log('[SyncService] Latest chat history fetched and stored');
       }
 
     } catch (error) {
@@ -344,14 +333,12 @@ export class SyncService {
 
   // Force immediate sync
   async forceSync() {
-    console.log('[SyncService] Force sync requested');
     await this.syncUserData();
     await this.processSyncQueue();
   }
 
   // Handle login sync
   async handleLogin(userData, token) {
-    console.log('[SyncService] Handling login sync');
     
     // Store auth data
     localStorage.setItem('user', JSON.stringify(userData));
@@ -373,7 +360,6 @@ export class SyncService {
 
   // Handle logout cleanup
   handleLogout() {
-    console.log('[SyncService] Handling logout cleanup');
     
     // Clear sync queue
     this.syncQueue = [];

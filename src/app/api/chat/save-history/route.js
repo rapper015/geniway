@@ -5,7 +5,6 @@ import jwt from 'jsonwebtoken';
 
 export async function POST(request) {
   try {
-    console.log('[save-history] API called');
     
     // Get authorization header
     const authHeader = request.headers.get('authorization');
@@ -30,11 +29,6 @@ export async function POST(request) {
     }
 
     const { messages, sessionId } = await request.json();
-    console.log('[save-history] Saving chat history:', { 
-      userId: decoded.userId, 
-      messageCount: messages?.length || 0, 
-      sessionId 
-    });
 
     await connectDB();
 
@@ -79,7 +73,6 @@ export async function POST(request) {
     chatSession.lastActive = new Date();
     await chatSession.save();
 
-    console.log('[save-history] Chat session saved:', chatSession._id, 'with', savedMessageIds.length, 'messages');
 
     return NextResponse.json({
       success: true,

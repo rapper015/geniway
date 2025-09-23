@@ -95,18 +95,6 @@ const MessageList = forwardRef(({
             message.type === 'ai' &&
             !isSystemMessage; // Not a system message
           
-          console.log('[MessageList] Rendering message:', { 
-            index, 
-            message: { id: message.id, type: message.type, content: message.content?.substring(0, 50) },
-            isResponseToUserQuestion,
-            isLatestBotMessage,
-            isSystemMessage,
-            hideQuickActions,
-            isStreaming,
-            onQuickReplyClick: !!onQuickReplyClick,
-            previousMessage: previousMessage ? { type: previousMessage.type, id: previousMessage.id } : null,
-            shouldShowQuickActions: isLatestBotMessage && isResponseToUserQuestion && onQuickReplyClick && !hideQuickActions && !isStreaming
-          });
           
           return (
             <div key={message.id} className="space-y-2">

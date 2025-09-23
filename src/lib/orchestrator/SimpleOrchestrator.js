@@ -48,17 +48,14 @@ export class SimpleOrchestrator {
 
   async processStudentInput(sessionId, studentInput, onEvent) {
     try {
-      console.log('[SimpleOrchestrator] Processing student input:', { sessionId, studentInput });
       
       // Get or create session
       let session = await this.getSession(sessionId);
       if (!session) {
-        console.log('[SimpleOrchestrator] Creating new session');
         session = await this.createSession(studentInput.userId, studentInput.subject);
       }
 
       // Add user message
-      console.log('[SimpleOrchestrator] Adding user message');
       await this.addMessage({
         sessionId: session._id.toString(),
         userId: studentInput.userId,
@@ -69,16 +66,12 @@ export class SimpleOrchestrator {
       });
 
       // Get conversation context
-      console.log('[SimpleOrchestrator] Building tutoring context');
       const context = await this.buildTutoringContext(session, studentInput);
       
       // Determine which section to generate based on intent
-      console.log('[SimpleOrchestrator] Determining section type');
       const sectionType = this.determineSectionByIntent(context);
-      console.log('[SimpleOrchestrator] Section type determined:', sectionType);
       
       // Generate appropriate section
-      console.log('[SimpleOrchestrator] Generating section content');
       let sectionContent;
       try {
         sectionContent = await this.generateSection(sectionType, context);
@@ -297,7 +290,7 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
         model: 'gpt-4o',
         messages: conversationHistory,
         temperature: 0.7,
-        max_tokens: 1000
+        max_tokens: 3000
       });
 
       const content = response.choices[0].message.content || 'I apologize, but I couldn\'t generate a response. Please try again.';
@@ -399,12 +392,9 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
   // Build tutoring context from session and student input
   async buildTutoringContext(session, studentInput) {
     try {
-      console.log('[SimpleOrchestrator] Building tutoring context for session:', session._id);
       const messages = await ChatMessage.find({ sessionId: session._id })
         .sort({ timestamp: 1 })
         .limit(10); // Last 10 messages for context
-
-      console.log('[SimpleOrchestrator] Found messages:', messages.length);
 
       // Fetch user profile information for personalization
       let userProfile = null;
@@ -416,7 +406,6 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
               { email: studentInput.userId }
             ]
           });
-          console.log('[SimpleOrchestrator] User profile found:', userProfile ? 'Yes' : 'No');
         }
       } catch (profileError) {
         console.error('[SimpleOrchestrator] Error fetching user profile:', profileError);
@@ -424,26 +413,20 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
 
       // Use guest profile data if user profile not found in database
       const profileData = userProfile || studentInput.guestProfile || {};
-      console.log('[SimpleOrchestrator] Using profile data:', profileData ? 'Yes' : 'No');
-      console.log('[SimpleOrchestrator] Student input language:', studentInput.language);
 
       // Build personalized curriculum context
       // Map language from studentInput to the format expected by the AI
       const mapLanguage = (lang) => {
-        console.log('[SimpleOrchestrator] Mapping language:', lang);
         switch (lang) {
           case 'hindi':
           case 'हिंदी':
-            console.log('[SimpleOrchestrator] Mapped hindi/हिंदी to hi');
             return 'hi';
           case 'hinglish':
           case 'हिंग्लिश':
-            console.log('[SimpleOrchestrator] Mapped hinglish/हिंग्लिश to hinglish');
             return 'hinglish';
           case 'english':
           case 'अंग्रेजी':
           default:
-            console.log('[SimpleOrchestrator] Mapped to en (default)');
             return 'en';
         }
       };
@@ -461,7 +444,6 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
         ageBand: profileData?.ageBand || '11-14'
       };
 
-      console.log('[SimpleOrchestrator] Final curriculum context language:', curriculumContext.language);
 
       return {
         sessionId: session._id.toString(),
@@ -485,50 +467,41 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
     const latestInput = context.currentInput.toLowerCase();
     const messageHistory = context.messageHistory;
     
-    console.log('[SimpleOrchestrator] Determining section for input:', latestInput);
     
     // Check if this is an MCQ response
     if (this.isMCQResponse(latestInput)) {
-      console.log('[SimpleOrchestrator] Detected MCQ response');
       return this.sectionTypes.MCQ_VALIDATION;
     }
     
     // Check if user confirmed understanding
     if (this.userConfirmedUnderstanding(latestInput)) {
-      console.log('[SimpleOrchestrator] Detected understanding confirmation');
       return this.sectionTypes.RECAP;
     }
     
     // Check if this is an initial question (no previous AI messages)
     const hasAIMessages = messageHistory.some(msg => msg.sender === 'ai');
     if (!hasAIMessages) {
-      console.log('[SimpleOrchestrator] Detected initial question');
       return this.sectionTypes.BIG_IDEA;
     }
     
     // Check for specific requests (order matters - more specific first)
     if (this.isNotClearRequest(latestInput)) {
-      console.log('[SimpleOrchestrator] Detected not clear request');
       return this.sectionTypes.ALTERNATIVE_EXPLANATION;
     }
     
     if (this.isHintRequest(latestInput)) {
-      console.log('[SimpleOrchestrator] Detected hint request');
       return this.sectionTypes.TRY_IT;
     }
     
     if (this.isStepsRequest(latestInput)) {
-      console.log('[SimpleOrchestrator] Detected steps request');
       return this.sectionTypes.EXAMPLE;
     }
     
     if (this.isExampleRequest(latestInput)) {
-      console.log('[SimpleOrchestrator] Detected example request');
       return this.sectionTypes.EXAMPLE;
     }
     
     // Default to Big Idea for new concepts
-    console.log('[SimpleOrchestrator] Defaulting to Big Idea');
     return this.sectionTypes.BIG_IDEA;
   }
 
@@ -546,36 +519,26 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
   }
 
   isStepsRequest(input) {
-    const result = /^(steps|step by step|detailed steps|show steps|show detailed steps|how to|process|procedure|break it down|explain step by step|walk me through|numbered steps|step 1|step 2|step 3|please show detailed steps)/i.test(input);
-    console.log('[SimpleOrchestrator] isStepsRequest check:', { input, result });
-    return result;
+    return /^(steps|step by step|detailed steps|show steps|show detailed steps|how to|process|procedure|break it down|explain step by step|walk me through|numbered steps|step 1|step 2|step 3|please show detailed steps)/i.test(input);
   }
 
   isHintRequest(input) {
-    const result = /^(hint|help|can you give me a hint|give me a hint)/i.test(input);
-    console.log('[SimpleOrchestrator] isHintRequest check:', { input, result });
-    return result;
+    return /^(hint|help|can you give me a hint|give me a hint)/i.test(input);
   }
 
   isNotClearRequest(input) {
-    const result = /^(not clear|confused|don't understand|can you explain this differently)/i.test(input);
-    console.log('[SimpleOrchestrator] isNotClearRequest check:', { input, result });
-    return result;
+    return /^(not clear|confused|don't understand|can you explain this differently)/i.test(input);
   }
 
   // Generate section content based on type
   async generateSection(sectionType, context) {
     try {
-      console.log('[SimpleOrchestrator] Building prompt for section:', sectionType);
       const prompt = this.buildSectionPrompt(sectionType, context);
-      console.log('[SimpleOrchestrator] Prompt built, length:', prompt.length);
       
       // Check if OpenAI API key is available
       if (!process.env.OPENAI_API_KEY) {
         throw new Error('OpenAI API key is not configured');
       }
-      
-      console.log('[SimpleOrchestrator] Calling OpenAI API');
       
       // Prepare messages array
       const messages = [
@@ -584,7 +547,6 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
 
       // Check if we have an image to analyze
       if (context.currentImageUrl) {
-        console.log('[SimpleOrchestrator] Image detected, using vision model');
         messages.push({
           role: 'user',
           content: [
@@ -609,7 +571,6 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
         max_tokens: this.getMaxTokensForSection(sectionType)
       });
 
-      console.log('[SimpleOrchestrator] OpenAI response received');
       const content = response.choices[0].message.content;
       
       return {
@@ -745,7 +706,6 @@ ${(() => {
   const instruction = curriculumContext.language === 'hi' ? 'IMPORTANT: Respond entirely in Hindi (हिंदी). Use Devanagari script for all text.' : 
     curriculumContext.language === 'hinglish' ? 'IMPORTANT: Respond in Hinglish (mix of Hindi and English). Use both Devanagari script and English as appropriate.' : 
     'IMPORTANT: Respond in English.';
-  console.log('[SimpleOrchestrator] Language instruction (Big Idea):', instruction);
   return instruction;
 })()}
 
@@ -762,8 +722,6 @@ Provide clear, concise explanation of the core concept in exactly 120 words or f
 3. One concrete real-world relevant example with Indian context
 4. Connection to student's question${imageUrl ? ' and the uploaded image' : ''}`;
 
-    console.log('[SimpleOrchestrator] Generated prompt for language:', curriculumContext.language);
-    console.log('[SimpleOrchestrator] Prompt preview:', prompt.substring(0, 500) + '...');
     
     return prompt;
   }
@@ -813,7 +771,6 @@ ${(() => {
   const instruction = curriculumContext.language === 'hi' ? 'IMPORTANT: Respond entirely in Hindi (हिंदी). Use Devanagari script for all text.' : 
     curriculumContext.language === 'hinglish' ? 'IMPORTANT: Respond in Hinglish (mix of Hindi and English). Use both Devanagari script and English as appropriate.' : 
     'IMPORTANT: Respond in English.';
-  console.log('[SimpleOrchestrator] Language instruction (Example):', instruction);
   return instruction;
 })()}
 
@@ -839,8 +796,6 @@ ${isDetailedStepsRequest ? 'Step 4: [Additional detail] - [Further explanation w
 
 Focus specifically on the original topic: "${input}"${imageUrl ? ' and the uploaded image' : ''}`;
 
-    console.log('[SimpleOrchestrator] Generated example prompt for language:', curriculumContext.language);
-    console.log('[SimpleOrchestrator] Example prompt preview:', prompt.substring(0, 500) + '...');
     
     return prompt;
   }
@@ -1077,14 +1032,14 @@ Focus on making the explanation as clear and accessible as possible using a comp
   // Get max tokens for each section type
   getMaxTokensForSection(sectionType) {
     const tokenLimits = {
-      [this.sectionTypes.BIG_IDEA]: 200,
-      [this.sectionTypes.EXAMPLE]: 400,
-      [this.sectionTypes.QUICK_CHECK]: 300,
-      [this.sectionTypes.TRY_IT]: 200,
-      [this.sectionTypes.RECAP]: 100,
-      [this.sectionTypes.MCQ_VALIDATION]: 150,
-      [this.sectionTypes.ALTERNATIVE_EXPLANATION]: 500
+      [this.sectionTypes.BIG_IDEA]: 3000,
+      [this.sectionTypes.EXAMPLE]: 4000,
+      [this.sectionTypes.QUICK_CHECK]: 2000,
+      [this.sectionTypes.TRY_IT]: 3000,
+      [this.sectionTypes.RECAP]: 1500,
+      [this.sectionTypes.MCQ_VALIDATION]: 2000,
+      [this.sectionTypes.ALTERNATIVE_EXPLANATION]: 4000
     };
-    return tokenLimits[sectionType] || 300;
+    return tokenLimits[sectionType] || 3000;
   }
 }

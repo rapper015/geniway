@@ -83,11 +83,7 @@ export default function RegisterForm({ onToggleMode, onRegister }) {
     }
   };
 
-  const grades = [
-    'Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5',
-    'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10',
-    'Class 11', 'Class 12'
-  ];
+  const grades = [6, 7, 8, 9, 10, 11, 12];
 
   return (
     <div className="w-full">
@@ -187,7 +183,7 @@ export default function RegisterForm({ onToggleMode, onRegister }) {
               >
                 <option value="">Select your grade</option>
                 {grades.map(grade => (
-                  <option key={grade} value={grade}>{grade}</option>
+                  <option key={grade} value={grade}>Grade {grade}</option>
                 ))}
               </select>
             </div>

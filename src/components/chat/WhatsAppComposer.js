@@ -31,17 +31,14 @@ export default function WhatsAppComposer({
   };
 
   const handleSend = () => {
-    console.log('[WhatsAppComposer] handleSend called:', { textContent: textContent.trim(), disabled });
     if (textContent.trim() && !disabled) {
       const messageText = textContent.trim();
-      console.log('[WhatsAppComposer] Sending message:', messageText);
       // Clear input immediately to prevent double sends
       setTextContent("");
       setInputHeight(40);
       // Send message immediately without setTimeout
       onSendMessage(messageText, "text");
     } else {
-      console.log('[WhatsAppComposer] Cannot send message:', { hasText: !!textContent.trim(), disabled });
     }
   };
 
