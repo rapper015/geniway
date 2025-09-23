@@ -13,8 +13,8 @@ export default function StickyBottomBar() {
   };
 
   const handleHindiClick = () => {
-    // Track button click
-    gtmEvents.buttonClicked('hindi_ask_button', 'sticky_bottom_bar');
+    // Track CTA click
+    gtmEvents.solveDoubtCtaClick('hindi_mein_poochho', 'sticky_bottom_bar');
     
     // Set language to Hindi and navigate to chat
     changeLanguage('hindi');

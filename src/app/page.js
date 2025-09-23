@@ -17,6 +17,7 @@ import SampleBottomSheet from "../components/SampleBottomSheet";
 import RoutingSkeleton from "../components/RoutingSkeleton";
 import AuthModal from "../components/auth/AuthModal";
 import { useAuth } from "../contexts/AuthContext";
+import GTMTestButton from "../components/GTMTestButton";
 
 export default function Home() {
   const [guestUuid, setGuestUuid] = useState(null);
@@ -82,9 +83,10 @@ export default function Home() {
     setIsAuthModalOpen(true);
   };
 
-  const handleAuthSuccess = (user) => {
+  const handleAuthSuccess = (user, token) => {
     console.log('Login successful:', user);
-    // The AuthContext will handle the login state
+    // Call AuthContext login function to update state
+    login(user, token);
   };
 
   return (
@@ -111,6 +113,9 @@ export default function Home() {
         onClose={() => setIsAuthModalOpen(false)}
         onAuthSuccess={handleAuthSuccess}
       />
+      
+      {/* GTM Test Button - Remove this in production */}
+      <GTMTestButton />
     </div>
   );
 }

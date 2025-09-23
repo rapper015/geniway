@@ -101,6 +101,7 @@ export default function EnhancedChatInterface({ subject, onBack }) {
       imageUrl
     };
 
+    // Add user message immediately to UI for instant feedback
     setMessages(prev => [...prev, userMessage]);
     setLastMessage(userMessage);
     setInputMessage('');
@@ -108,36 +109,42 @@ export default function EnhancedChatInterface({ subject, onBack }) {
     setIsStreaming(true);
     setStreamingContent('');
 
-    try {
-      // Get or create session
-      if (!sessionId) {
-        const userId = isAuthenticated ? user.id : (isGuest ? guestUser.id : 'anonymous');
-        const response = await fetch('/api/sessions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            userId, 
-            subject: subject || 'general',
-            isGuest: isGuest 
-          })
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          setSessionId(data.sessionId);
+    // Handle session creation in background - don't block UI
+    const handleSessionAndStreaming = async () => {
+      try {
+        // Get or create session
+        let currentSessionId = sessionId;
+        if (!currentSessionId) {
+          const userId = isAuthenticated ? user.id : (isGuest ? guestUser.id : 'anonymous');
+          const response = await fetch('/api/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              userId, 
+              subject: subject || 'general',
+              isGuest: isGuest 
+            })
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            currentSessionId = data.sessionId;
+            setSessionId(currentSessionId);
+          } else {
+            throw new Error('Failed to create session');
+          }
         }
-      }
 
-      // Use SSE streaming for real-time responses
-      const params = new URLSearchParams({
-        sessionId: sessionId || 'new',
-        message: content,
-        type,
-        ...(imageUrl && { imageUrl })
-      });
+        // Use SSE streaming for real-time responses
+        const params = new URLSearchParams({
+          sessionId: currentSessionId || 'new',
+          message: content,
+          type,
+          ...(imageUrl && { imageUrl })
+        });
 
-      const eventSource = new EventSource(`/api/solve?${params}`);
-      eventSourceRef.current = eventSource;
+        const eventSource = new EventSource(`/api/solve?${params}`);
+        eventSourceRef.current = eventSource;
 
       let currentSectionData = null;
       let currentStepData = null;
@@ -235,20 +242,23 @@ export default function EnhancedChatInterface({ subject, onBack }) {
         setIsStreaming(false);
       };
 
-    } catch (error) {
-      console.error('Error sending message:', error);
-      const errorMessage = {
-        id: `error-${Date.now()}`,
-        type: 'ai',
-        content: 'Sorry, I encountered an error. Please try again.',
-        timestamp: new Date(),
-        messageType: 'text'
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
-      setIsStreaming(false);
-    }
+      } catch (error) {
+        console.error('Error in session creation or streaming:', error);
+        const errorMessage = {
+          id: `error-${Date.now()}`,
+          type: 'ai',
+          content: "I'm having trouble connecting right now. Please try again in a moment.",
+          timestamp: new Date(),
+          messageType: 'text'
+        };
+        setMessages(prev => [...prev, errorMessage]);
+        setIsLoading(false);
+        setIsStreaming(false);
+      }
+    };
+
+    // Start session creation and streaming in background
+    handleSessionAndStreaming();
   };
 
   const handleSubmit = (e) => {

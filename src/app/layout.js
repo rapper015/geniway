@@ -4,6 +4,7 @@ import { AuthProvider } from "../contexts/AuthContext";
 import { LanguageProvider } from "../contexts/LanguageContext";
 import { ProfileCollectionProvider } from "../contexts/ProfileCollectionContext";
 import GoogleAnalytics from "../components/GoogleAnalytics";
+import { initializeGTM } from "../lib/gtm";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -42,6 +43,22 @@ export default function RootLayout({ children }) {
             </ProfileCollectionProvider>
           </LanguageProvider>
         </AuthProvider>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              // Initialize GTM after page load
+              if (typeof window !== 'undefined') {
+                window.addEventListener('load', function() {
+                  console.log('Page loaded, initializing GTM...');
+                  // Call initializeGTM from the imported function
+                  if (window.initializeGTM) {
+                    window.initializeGTM();
+                  }
+                });
+              }
+            `,
+          }}
+        />
       </body>
     </html>
   );

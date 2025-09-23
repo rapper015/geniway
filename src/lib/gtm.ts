@@ -159,6 +159,38 @@ export const gtmEvents = {
       });
       console.log('GTM Event: button_clicked', { buttonName, location, sessionId });
     }
+  },
+
+  // Event: solve_doubt_cta_click - When user clicks CTA buttons to solve doubts
+  solveDoubtCtaClick: (buttonName?: string, location?: string, sessionId?: string) => {
+    if (typeof window !== 'undefined') {
+      window.dataLayer.push({
+        event: 'solve_doubt_cta_click',
+        event_category: 'conversion',
+        event_label: 'Solve Doubt CTA Clicked',
+        event_action: 'click_solve_doubt_cta',
+        button_name: buttonName || 'unknown',
+        location: location || 'unknown',
+        session_id: sessionId || 'unknown'
+      });
+      console.log('GTM Event: solve_doubt_cta_click', { buttonName, location, sessionId });
+    }
+  },
+
+  // Event: link_shared - When link is shared via WhatsApp
+  linkShared: (shareMethod?: string, location?: string, sessionId?: string) => {
+    if (typeof window !== 'undefined') {
+      window.dataLayer.push({
+        event: 'link_shared',
+        event_category: 'engagement',
+        event_label: 'Link Shared',
+        event_action: 'share_link',
+        share_method: shareMethod || 'unknown',
+        location: location || 'unknown',
+        session_id: sessionId || 'unknown'
+      });
+      console.log('GTM Event: link_shared', { shareMethod, location, sessionId });
+    }
   }
 };
 

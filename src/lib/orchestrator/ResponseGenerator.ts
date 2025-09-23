@@ -346,8 +346,8 @@ Generate a helpful response that:
   private cleanContent(content: string): string {
     return content
       .replace(/\n{3,}/g, '\n\n') // Remove excessive newlines
-      .replace(/\s{2,}/g, ' ') // Remove excessive spaces
-      .trim();
+      .replace(/\s{2,}/g, ' '); // Remove excessive spaces
+      // Removed .trim() to preserve leading/trailing whitespace in bot messages
   }
 
   private getFallbackSection(

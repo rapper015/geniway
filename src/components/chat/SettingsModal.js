@@ -76,87 +76,107 @@ export default function SettingsModal({ isOpen, onClose, trigger, localProfileDa
     }
   }, [isAuthenticated, user, isGuest, guestUser]);
 
-  // Load profile data when modal opens or local profile data changes
+  // Load profile data when modal opens or authentication state changes
   useEffect(() => {
     if (isOpen && effectiveUserId) {
       loadProfile();
     }
-  }, [isOpen, effectiveUserId, localProfileData]);
+  }, [isOpen, effectiveUserId, isAuthenticated, user]);
 
-  // Also update profile when localProfileData changes (even if modal is closed)
+  // Update profile when user authentication state or local profile data changes
   useEffect(() => {
-    console.log('[SettingsModal] localProfileData changed:', localProfileData);
-    if (localProfileData && Object.keys(localProfileData).length > 0) {
-      // Create profile from local data
-      const profileFromLocalData = {
-        user_id: effectiveUserId,
-        first_name: localProfileData.firstName || '',
-        last_name: localProfileData.lastName || '',
-        name: localProfileData.name || '',
-        preferred_name: '',
-        whatsapp_number: '',
-        state: localProfileData.state || '',
-        city: localProfileData.city || '',
-        board: localProfileData.board || 'CBSE',
-        grade: localProfileData.grade || null,
-        subjects: localProfileData.subjects || [],
-        lang_pref: 'en',
-        teaching_language: 'English',
-        pace: localProfileData.pace || 'Normal',
-        learning_style: localProfileData.learningStyle || 'Text',
-        learning_styles: localProfileData.learningStyles || ['Text'],
-        content_mode: 'step-by-step',
-        fast_track_enabled: false,
-        save_chat_history: true,
-        study_streaks_enabled: true,
-        break_reminders_enabled: true,
-        mastery_nudges_enabled: true,
-        data_sharing_enabled: false
-      };
-      
-      console.log('[SettingsModal] Updating profile with:', profileFromLocalData);
-      setProfile(profileFromLocalData);
+    console.log('[SettingsModal] Auth state or profile data changed:', { 
+      isAuthenticated, 
+      hasUser: !!user, 
+      localProfileData 
+    });
+    
+    if (effectiveUserId) {
+      loadProfile();
     }
-  }, [localProfileData, effectiveUserId]);
+  }, [isAuthenticated, user, localProfileData, effectiveUserId]);
 
   const loadProfile = async () => {
     setLoading(true);
     try {
-      // For now, skip API calls and just use local profile data
-      // Create profile from local data only
-      const profileFromLocalData = {
-        user_id: effectiveUserId,
-        first_name: localProfileData.firstName || '',
-        last_name: localProfileData.lastName || '',
-        name: localProfileData.name || '',
-        preferred_name: '',
-        whatsapp_number: '',
-        state: localProfileData.state || '',
-        city: localProfileData.city || '',
-        board: localProfileData.board || 'CBSE',
-        grade: localProfileData.grade || null,
-        subjects: localProfileData.subjects || [],
-        lang_pref: 'en',
-        teaching_language: 'English',
-        pace: localProfileData.pace || 'Normal',
-        learning_style: localProfileData.learningStyle || 'Text',
-        learning_styles: localProfileData.learningStyles || ['Text'],
-        content_mode: 'step-by-step',
-        fast_track_enabled: false,
-        save_chat_history: true,
-        study_streaks_enabled: true,
-        break_reminders_enabled: true,
-        mastery_nudges_enabled: true,
-        data_sharing_enabled: false
-      };
+      let profileData = {};
+      let userInfo = {};
+
+      if (isAuthenticated && user) {
+        // Use authenticated user data
+        console.log('[SettingsModal] Loading profile for authenticated user:', user);
+        profileData = {
+          user_id: user._id || user.id,
+          first_name: user.firstName || user.first_name || '',
+          last_name: user.lastName || user.last_name || '',
+          name: user.name || '',
+          preferred_name: user.preferredName || user.preferred_name || '',
+          whatsapp_number: user.whatsappNumber || user.whatsapp_number || '',
+          state: user.state || '',
+          city: user.city || '',
+          board: user.board || 'CBSE',
+          grade: user.grade || null,
+          subjects: user.subjects || [],
+          lang_pref: user.langPref || user.lang_pref || 'en',
+          teaching_language: user.teachingLanguage || user.teaching_language || 'English',
+          pace: user.pace || 'Normal',
+          learning_style: user.learningStyle || user.learning_style || 'Text',
+          learning_styles: user.learningStyles || user.learning_styles || ['Text'],
+          content_mode: user.contentMode || user.content_mode || 'step-by-step',
+          fast_track_enabled: user.fastTrackEnabled || user.fast_track_enabled || false,
+          save_chat_history: user.saveChatHistory !== undefined ? user.saveChatHistory : true,
+          study_streaks_enabled: user.studyStreaksEnabled !== undefined ? user.studyStreaksEnabled : true,
+          break_reminders_enabled: user.breakRemindersEnabled !== undefined ? user.breakRemindersEnabled : true,
+          mastery_nudges_enabled: user.masteryNudgesEnabled !== undefined ? user.masteryNudgesEnabled : true,
+          data_sharing_enabled: user.dataSharingEnabled || user.data_sharing_enabled || false
+        };
+
+        userInfo = {
+          id: user._id || user.id,
+          email: user.email || '',
+          role: user.role || 'student',
+          name: user.name || 'User'
+        };
+      } else {
+        // Use local profile data for guest users
+        console.log('[SettingsModal] Loading profile for guest user with local data:', localProfileData);
+        profileData = {
+          user_id: effectiveUserId,
+          first_name: localProfileData.firstName || '',
+          last_name: localProfileData.lastName || '',
+          name: localProfileData.name || '',
+          preferred_name: '',
+          whatsapp_number: '',
+          state: localProfileData.state || '',
+          city: localProfileData.city || '',
+          board: localProfileData.board || 'CBSE',
+          grade: localProfileData.grade || null,
+          subjects: localProfileData.subjects || [],
+          lang_pref: 'en',
+          teaching_language: 'English',
+          pace: localProfileData.pace || 'Normal',
+          learning_style: localProfileData.learningStyle || 'Text',
+          learning_styles: localProfileData.learningStyles || ['Text'],
+          content_mode: 'step-by-step',
+          fast_track_enabled: false,
+          save_chat_history: true,
+          study_streaks_enabled: true,
+          break_reminders_enabled: true,
+          mastery_nudges_enabled: true,
+          data_sharing_enabled: false
+        };
+
+        userInfo = {
+          id: effectiveUserId,
+          email: `${effectiveUserId}@geniway.com`,
+          role: localProfileData.role || 'student',
+          name: localProfileData.name || 'Guest User'
+        };
+      }
       
-      setProfile(profileFromLocalData);
-      setUserData({
-        id: effectiveUserId,
-        email: isAuthenticated ? user?.email : `${effectiveUserId}@geniway.com`,
-        role: localProfileData.role || 'student',
-        name: localProfileData.name || 'Guest User'
-      });
+      console.log('[SettingsModal] Setting profile data:', profileData);
+      setProfile(profileData);
+      setUserData(userInfo);
       
     } catch (error) {
       console.error('Error loading profile:', error);

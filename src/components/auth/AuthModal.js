@@ -9,8 +9,8 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
   const [isLoginMode, setIsLoginMode] = useState(true);
 
 
-  const handleAuthSuccess = (user) => {
-    onAuthSuccess(user);
+  const handleAuthSuccess = (user, token) => {
+    onAuthSuccess(user, token);
     onClose();
   };
 

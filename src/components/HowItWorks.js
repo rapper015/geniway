@@ -1,11 +1,14 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { gtmEvents } from '../lib/gtm';
 
 export default function HowItWorks() {
   const router = useRouter();
 
   const handleOpenClick = () => {
+    // Track CTA click
+    gtmEvents.solveDoubtCtaClick('open_the_doubt_solver', 'how_it_works');
     router.push('/chat');
   };
 

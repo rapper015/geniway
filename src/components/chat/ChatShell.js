@@ -508,6 +508,12 @@ export default function ChatShell({ subject, onBack }) {
 
     // Track chat message sent event
     gtmEvents.chatMessageSent(type, currentSessionId, userId);
+    
+    // Track chat session start event for first message
+    if (messages.length === 0) {
+      const profileId = isAuthenticated ? user?.id || user?._id : guestUser?.id;
+      gtmEvents.chatSessionStart(profileId, currentSessionId);
+    }
 
     // Handle quiz responses (only if we're actively in quiz mode)
     if (waitingForQuizResponse && quizStep && quizStep !== null) {
@@ -546,44 +552,6 @@ export default function ChatShell({ subject, onBack }) {
     }
     lastCallRef.current = { key: callKey, time: now };
 
-    // Create session if none exists
-    let sessionId = currentSessionId;
-    if (!sessionId) {
-      console.log('[ChatShell] No current session, creating new one...');
-      console.log('[ChatShell] Session creation data:', { 
-        userId, 
-        userIdType: typeof userId,
-        subject: subject || detectSubject(text),
-        isAuthenticated,
-        isGuest: !isAuthenticated 
-      });
-      try {
-        const response = await fetch('/api/sessions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            userId, 
-            subject: subject || detectSubject(text),
-            isGuest: !isAuthenticated 
-          })
-        });
-        
-        if (response.ok) {
-          const session = await response.json();
-          sessionId = session.sessionId;
-          console.log('[ChatShell] Session created:', { sessionId, session });
-          setCurrentSessionId(sessionId);
-        } else {
-          throw new Error('Failed to create session');
-        }
-      } catch (error) {
-        console.error("Failed to create session:", error);
-        return;
-      }
-    } else {
-      console.log('[ChatShell] Using existing session:', sessionId);
-    }
-
     // Add user message immediately to UI for instant feedback
     const tempMessageId = Date.now();
     const userMessage = {
@@ -595,7 +563,7 @@ export default function ChatShell({ subject, onBack }) {
       imageUrl: metadata?.imageUrl
     };
 
-    // Add message to UI immediately
+    // Add message to UI immediately - this happens first for instant feedback
     setMessages(prev => {
       const newMessages = [...prev, userMessage];
       console.log('[ChatShell] Added user message:', userMessage);
@@ -609,9 +577,66 @@ export default function ChatShell({ subject, onBack }) {
     // Reset quiz completion flag for new question
     setQuizCompletedForCurrentQuestion(false);
 
-    // Stream real AI response from orchestrator
-    console.log('[ChatShell] Starting streaming with sessionId:', sessionId);
-    streamRealAIResponse(text, type === "image" ? metadata?.imageUrl : undefined, sessionId);
+    // Handle session creation in background - don't block UI
+    let sessionId = currentSessionId;
+    if (!sessionId) {
+      console.log('[ChatShell] No current session, creating new one in background...');
+      console.log('[ChatShell] Session creation data:', { 
+        userId, 
+        userIdType: typeof userId,
+        subject: subject || detectSubject(text),
+        isAuthenticated,
+        isGuest: !isAuthenticated 
+      });
+      
+      // Create session asynchronously without blocking UI
+      const createSession = async () => {
+        try {
+          const response = await fetch('/api/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              userId, 
+              subject: subject || detectSubject(text),
+              isGuest: !isAuthenticated 
+            })
+          });
+          
+          if (response.ok) {
+            const session = await response.json();
+            sessionId = session.sessionId;
+            console.log('[ChatShell] Session created:', { sessionId, session });
+            setCurrentSessionId(sessionId);
+            
+            // Start streaming after session is created
+            console.log('[ChatShell] Starting streaming with new sessionId:', sessionId);
+            streamRealAIResponse(text, type === "image" ? metadata?.imageUrl : undefined, sessionId);
+          } else {
+            throw new Error('Failed to create session');
+          }
+        } catch (error) {
+          console.error("Failed to create session:", error);
+          // Show error message to user
+          const errorMessage = {
+            id: Date.now() + 2,
+            type: 'ai',
+            content: "I'm having trouble connecting right now. Please try again in a moment.",
+            timestamp: new Date(),
+            messageType: 'text'
+          };
+          setMessages(prev => [...prev, errorMessage]);
+          setIsStreaming(false);
+        }
+      };
+      
+      // Start session creation in background
+      createSession();
+    } else {
+      console.log('[ChatShell] Using existing session:', sessionId);
+      // Stream real AI response from orchestrator immediately
+      console.log('[ChatShell] Starting streaming with existing sessionId:', sessionId);
+      streamRealAIResponse(text, type === "image" ? metadata?.imageUrl : undefined, sessionId);
+    }
   }, [currentSessionId, isStreaming, showOnboarding, subject, userId, isAuthenticated, waitingForProfileResponse, profileStep, waitingForQuizResponse, quizStep]);
 
   // Update user profile in local state (no API calls for now)
@@ -968,15 +993,19 @@ export default function ChatShell({ subject, onBack }) {
       setQuizCompletedForCurrentQuestion(true); // Mark quiz as completed for this question
       
       // Track quiz completion
-      gtmEvents.quizCompleted(currentQuiz?.id || 'unknown', score || 0, currentSessionId);
+      const quizScore = isCorrect ? 1 : 0; // 1 for correct, 0 for incorrect
+      gtmEvents.quizCompleted(currentQuiz?.id || 'unknown', quizScore, currentSessionId);
       
       // Check if we should ask for profile info based on gotItCount
       const existingProfile = JSON.parse(localStorage.getItem('guestProfile') || '{}');
       const shouldAskProfile = shouldAskForProfileInfo(gotItCount, existingProfile);
       
-      // Trigger step-wise modal if needed
+      // Trigger step-wise modal if needed with delay
       if (shouldAskProfile.ask) {
-        triggerStepModal(shouldAskProfile.step, existingProfile);
+        // Add delay before showing profile popup
+        setTimeout(() => {
+          triggerStepModal(shouldAskProfile.step, existingProfile);
+        }, 2000); // 2 second delay
       } else {
         // Encourage user to ask another question
         const encourageMessage = {
@@ -1020,7 +1049,7 @@ export default function ChatShell({ subject, onBack }) {
     return baseComplete;
   }, []);
 
-  // Determine when to ask for profile information based on gotItCount
+  // Determine when to ask for profile information based on missing fields
   const shouldAskForProfileInfo = useCallback((currentGotItCount, existingProfile) => {
     console.log('[ChatShell] shouldAskForProfileInfo called:', { currentGotItCount, existingProfile });
     
@@ -1033,7 +1062,82 @@ export default function ChatShell({ subject, onBack }) {
       };
     }
     
-    // If profile is already complete, ask for email first
+    // Priority order: Check for missing fields in order of importance
+    // This ensures that if a user skips a step, we keep asking for it until completed
+    
+    // 1. Ask for name first (most important)
+    if (!existingProfile.firstName || !existingProfile.lastName) {
+      return {
+        ask: true,
+        step: 'name',
+        message: "Great! I'd love to know your name so I can personalize our learning experience. What's your first name?"
+      };
+    }
+    
+    // 2. Ask for role
+    if (!existingProfile.role) {
+      return {
+        ask: true,
+        step: 'role_grade',
+        message: "Are you a student, parent, or teacher?"
+      };
+    }
+    
+    // 3. Ask for grade (if student)
+    if (existingProfile.role === 'student' && !existingProfile.grade) {
+      return {
+        ask: true,
+        step: 'grade',
+        message: "What grade are you in? (6-12)"
+      };
+    }
+    
+    // 4. Ask for board
+    if (!existingProfile.board) {
+      return {
+        ask: true,
+        step: 'board',
+        message: "Which board are you studying under? (CBSE, ICSE, State Board, IB, IGCSE, or Other)"
+      };
+    }
+    
+    // 5. Ask for subjects
+    if (!existingProfile.subjects || existingProfile.subjects.length === 0) {
+      return {
+        ask: true,
+        step: 'subjects',
+        message: "Which subjects are you most interested in? You can mention multiple subjects like Math, Science, English, etc."
+      };
+    }
+    
+    // 6. Ask for learning style
+    if (!existingProfile.learningStyle) {
+      return {
+        ask: true,
+        step: 'learning_style',
+        message: "How do you prefer to learn? (Visual - seeing diagrams, Voice - listening, Text - reading, or Hands-on - doing activities)"
+      };
+    }
+    
+    // 7. Ask for pace
+    if (!existingProfile.pace) {
+      return {
+        ask: true,
+        step: 'pace',
+        message: "What's your preferred learning pace? (Fast - quick answers, Normal - balanced, or Detailed - thorough explanations)"
+      };
+    }
+    
+    // 8. Ask for location
+    if (!existingProfile.state) {
+      return {
+        ask: true,
+        step: 'location',
+        message: "Which state are you from? This helps me provide more relevant examples."
+      };
+    }
+    
+    // 9. If profile is complete, ask for email
     if (isProfileComplete(existingProfile) && !existingProfile.email) {
       console.log('[ChatShell] Profile complete, asking for email');
       return {
@@ -1043,7 +1147,7 @@ export default function ChatShell({ subject, onBack }) {
       };
     }
     
-    // If profile is complete and has email but no password, ask for password
+    // 10. If profile is complete and has email but no password, ask for password
     if (isProfileComplete(existingProfile) && existingProfile.email && !existingProfile.password) {
       console.log('[ChatShell] Profile complete with email, asking for password');
       return {
@@ -1053,7 +1157,7 @@ export default function ChatShell({ subject, onBack }) {
       };
     }
     
-    // If profile is complete and has both email and password, ask for account creation
+    // 11. If profile is complete and has both email and password, ask for account creation
     if (isProfileComplete(existingProfile) && existingProfile.email && existingProfile.password && !existingProfile.accountCreated) {
       console.log('[ChatShell] Profile complete with email and password, creating account');
       return {
@@ -1063,97 +1167,7 @@ export default function ChatShell({ subject, onBack }) {
       };
     }
     
-    // First "Got it" (gotItCount = 1): Ask for name
-    if (currentGotItCount === 1 && (!existingProfile.firstName || !existingProfile.lastName)) {
-      return {
-        ask: true,
-        step: 'name',
-        message: "Great! I'd love to know your name so I can personalize our learning experience. What's your first name?"
-      };
-    }
-    
-    // Second "Got it" (gotItCount = 2): Ask for role
-    if (currentGotItCount === 2 && !existingProfile.role) {
-      return {
-        ask: true,
-        step: 'role_grade',
-        message: "Are you a student, parent, or teacher?"
-      };
-    }
-    
-    // Third "Got it" (gotItCount = 3): Ask for grade (if student)
-    if (currentGotItCount === 3 && existingProfile.role === 'student' && !existingProfile.grade) {
-      return {
-        ask: true,
-        step: 'grade',
-        message: "What grade are you in? (6-12)"
-      };
-    }
-    
-    // Fourth "Got it" (gotItCount = 4): Ask for board
-    if (currentGotItCount === 4 && !existingProfile.board) {
-      return {
-        ask: true,
-        step: 'board',
-        message: "Which board are you studying under? (CBSE, ICSE, State Board, IB, IGCSE, or Other)"
-      };
-    }
-    
-    // Fifth "Got it" (gotItCount = 5): Ask for subjects
-    if (currentGotItCount === 5 && (!existingProfile.subjects || existingProfile.subjects.length === 0)) {
-      return {
-        ask: true,
-        step: 'subjects',
-        message: "Which subjects are you most interested in? You can mention multiple subjects like Math, Science, English, etc."
-      };
-    }
-    
-    // Sixth "Got it" (gotItCount = 6): Ask for learning style
-    if (currentGotItCount === 6 && !existingProfile.learningStyle) {
-      return {
-        ask: true,
-        step: 'learning_style',
-        message: "How do you prefer to learn? (Visual - seeing diagrams, Voice - listening, Text - reading, or Hands-on - doing activities)"
-      };
-    }
-    
-    // Seventh "Got it" (gotItCount = 7): Ask for pace
-    if (currentGotItCount === 7 && !existingProfile.pace) {
-      return {
-        ask: true,
-        step: 'pace',
-        message: "What's your preferred learning pace? (Fast - quick answers, Normal - balanced, or Detailed - thorough explanations)"
-      };
-    }
-    
-    // Eighth "Got it" (gotItCount = 8): Ask for location
-    if (currentGotItCount === 8 && !existingProfile.state) {
-      return {
-        ask: true,
-        step: 'location',
-        message: "Which state are you from? This helps me provide more relevant examples."
-      };
-    }
-    
-    // Ninth "Got it" (gotItCount = 9): Ask for password
-    if (currentGotItCount === 9 && existingProfile.firstName && existingProfile.role && !existingProfile.password) {
-      return {
-        ask: true,
-        step: 'password',
-        message: "Great! Now let's create your account. Please set a password for your account."
-      };
-    }
-    
-    // Tenth "Got it" (gotItCount = 10): Complete profile and auto-register
-    if (currentGotItCount === 10 && existingProfile.firstName && existingProfile.role && existingProfile.password) {
-      return {
-        ask: true,
-        step: 'complete',
-        message: "Perfect! I have all the information I need to create your personalized learning profile. Let me set up your account!"
-      };
-    }
-    
-    // Don't ask for profile info yet
+    // Don't ask for profile info if everything is complete
     return {
       ask: false,
       step: null,

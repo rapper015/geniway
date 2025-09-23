@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { syncService } from '../lib/syncService';
 
 const ProfileCollectionContext = createContext();
 
@@ -116,21 +117,11 @@ export function ProfileCollectionProvider({ children }) {
       // Save to localStorage for guest users
       localStorage.setItem('guestProfile', JSON.stringify(updatedProfile));
       
-      // If user is authenticated, save to API
+      // If user is authenticated, sync to database using sync service
       const token = localStorage.getItem('token');
       if (token) {
-        const response = await fetch('/api/profile/update', {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(stepData)
-        });
-        
-        if (!response.ok) {
-          throw new Error('Failed to save profile step');
-        }
+        // Add to sync queue for optimal sync
+        syncService.addToSyncQueue('updateProfile', stepData, 'high');
       }
       
       // Call the completion callback if provided and we have a valid step

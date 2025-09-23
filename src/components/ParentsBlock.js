@@ -6,7 +6,7 @@ export default function ParentsBlock() {
 
   const handleWhatsAppClick = () => {
     // Track WhatsApp share event
-    gtmEvents.buttonClicked('whatsapp_share', 'parents_block');
+    gtmEvents.linkShared('whatsapp', 'parents_block');
     
     const message = `Hi! I found this amazing AI tutor for solving doubts - Geni Ma'am! 🎓
 

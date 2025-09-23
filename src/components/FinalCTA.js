@@ -8,13 +8,13 @@ export default function FinalCTA() {
 
   const handleStartClick = () => {
     // Track CTA button click
-    gtmEvents.buttonClicked('start_learning', 'final_cta');
+    gtmEvents.solveDoubtCtaClick('start_solving_now', 'final_cta');
     router.push('/chat');
   };
 
   const handleWhatsAppClick = () => {
     // Track WhatsApp share event
-    gtmEvents.buttonClicked('whatsapp_share', 'final_cta');
+    gtmEvents.linkShared('whatsapp', 'final_cta');
     const message = `Hi! I found this amazing AI tutor for solving doubts - Geni Ma'am! 🎓
 
 She can help with:

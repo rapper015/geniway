@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect } from 'react';
+import { syncService } from '../lib/syncService';
 import { guestUserManager } from '../lib/guestUser';
 
 const AuthContext = createContext();
@@ -23,6 +24,7 @@ export function AuthProvider({ children }) {
         const parsedUser = JSON.parse(userData);
         console.log('AuthContext: Setting user from localStorage:', parsedUser);
         setUser(parsedUser);
+        setGuestUser(null);
       } catch (error) {
         console.error('Error parsing user data:', error);
         localStorage.removeItem('token');
@@ -38,9 +40,58 @@ export function AuthProvider({ children }) {
     setLoading(false);
   }, []);
 
+  // Listen for cross-window authentication changes
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'token' || e.key === 'user') {
+        console.log('AuthContext: Storage change detected:', e.key);
+        
+        const token = localStorage.getItem('token');
+        const userData = localStorage.getItem('user');
+        
+        if (token && userData) {
+          try {
+            const parsedUser = JSON.parse(userData);
+            console.log('AuthContext: Cross-window login detected:', parsedUser);
+            setUser(parsedUser);
+            setGuestUser(null);
+          } catch (error) {
+            console.error('Error parsing user data from storage event:', error);
+          }
+        } else {
+          console.log('AuthContext: Cross-window logout detected');
+          setUser(null);
+          const guest = guestUserManager.getGuestUser();
+          setGuestUser(guest);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
+
   const login = async (userData, token) => {
     console.log('AuthContext: Login called with userData:', userData);
+    
+    // Store auth data in localStorage immediately
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(userData));
+    
+    // Update state
     setUser(userData);
+    setGuestUser(null); // Clear guest user
+    
+    // Use sync service for optimal login sync
+    try {
+      await syncService.handleLogin(userData, token);
+      console.log('AuthContext: Login sync completed');
+    } catch (error) {
+      console.error('AuthContext: Login sync failed:', error);
+    }
     
     // Force a re-render by updating the state
     setTimeout(() => {
@@ -73,8 +124,9 @@ export function AuthProvider({ children }) {
   const logout = () => {
     setUser(null);
     setMigrationStatus(null);
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    
+    // Use sync service for logout cleanup
+    syncService.handleLogout();
     
     // Initialize guest user after logout
     const guest = guestUserManager.getGuestUser();

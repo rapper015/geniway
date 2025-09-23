@@ -2,12 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from 'next/navigation';
+import { gtmEvents } from '../lib/gtm';
 
 export default function Hero() {
   const router = useRouter();
   const [showSampleSheet, setShowSampleSheet] = useState(false);
 
   const handleStartClick = () => {
+    // Track CTA click
+    gtmEvents.solveDoubtCtaClick('start_solving_my_doubt', 'hero_section');
     router.push('/chat');
   };
 

@@ -37,9 +37,7 @@ export default function LoginForm({ onToggleMode, onLogin }) {
       const data = await response.json();
 
       if (response.ok) {
-        // Store token in localStorage
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
+        // Call the login callback with user and token
         onLogin(data.user, data.token);
       } else {
         setError(data.error || 'Login failed');

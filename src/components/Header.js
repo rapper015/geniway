@@ -2,12 +2,15 @@
 
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../contexts/AuthContext';
+import { gtmEvents } from '../lib/gtm';
 
 export default function Header({ onLoginClick }) {
   const router = useRouter();
   const { isAuthenticated, user } = useAuth();
 
   const handleStartClick = () => {
+    // Track CTA click
+    gtmEvents.solveDoubtCtaClick('start', 'header');
     router.push('/chat');
   };
 
