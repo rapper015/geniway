@@ -121,7 +121,7 @@ export function ProfileCollectionProvider({ children }) {
       const token = localStorage.getItem('token');
       if (token) {
         // Add to sync queue for optimal sync
-        syncService.addToSyncQueue('updateProfile', stepData, 'high');
+        syncService.instance.addToSyncQueue('updateProfile', stepData, 'high');
       }
       
       // Call the completion callback if provided and we have a valid step

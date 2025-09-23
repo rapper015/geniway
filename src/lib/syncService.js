@@ -4,20 +4,22 @@
 export class SyncService {
   constructor() {
     this.syncQueue = [];
-    this.isOnline = navigator.onLine;
+    this.isOnline = typeof window !== 'undefined' ? navigator.onLine : true;
     this.syncInProgress = false;
     this.retryAttempts = 3;
     this.syncInterval = null;
     
-    // Listen for online/offline events
-    window.addEventListener('online', () => {
-      this.isOnline = true;
-      this.processSyncQueue();
-    });
-    
-    window.addEventListener('offline', () => {
-      this.isOnline = false;
-    });
+    // Listen for online/offline events (only in browser)
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', () => {
+        this.isOnline = true;
+        this.processSyncQueue();
+      });
+      
+      window.addEventListener('offline', () => {
+        this.isOnline = false;
+      });
+    }
     
     // Start periodic sync
     this.startPeriodicSync();
@@ -397,5 +399,25 @@ export class SyncService {
   }
 }
 
-// Create singleton instance
-export const syncService = new SyncService();
+// Create singleton instance (lazy initialization to avoid SSR issues)
+let _syncService = null;
+
+export const syncService = {
+  get instance() {
+    if (typeof window === 'undefined') {
+      // Return a mock object during SSR
+      return {
+        addToSyncQueue: () => {},
+        forceSync: () => Promise.resolve(),
+        handleLogin: () => Promise.resolve(),
+        handleLogout: () => {},
+        getSyncStatus: () => ({ isOnline: true, syncInProgress: false, queueLength: 0, hasToken: false })
+      };
+    }
+    
+    if (!_syncService) {
+      _syncService = new SyncService();
+    }
+    return _syncService;
+  }
+};

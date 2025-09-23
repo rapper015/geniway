@@ -87,7 +87,7 @@ export function AuthProvider({ children }) {
     
     // Use sync service for optimal login sync
     try {
-      await syncService.handleLogin(userData, token);
+      await syncService.instance.handleLogin(userData, token);
       console.log('AuthContext: Login sync completed');
     } catch (error) {
       console.error('AuthContext: Login sync failed:', error);
@@ -126,7 +126,7 @@ export function AuthProvider({ children }) {
     setMigrationStatus(null);
     
     // Use sync service for logout cleanup
-    syncService.handleLogout();
+    syncService.instance.handleLogout();
     
     // Initialize guest user after logout
     const guest = guestUserManager.getGuestUser();

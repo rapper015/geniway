@@ -274,7 +274,7 @@ export default function ChatShell({ subject, onBack }) {
   const [userId, setUserId] = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(true);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isOnline, setIsOnline] = useState(typeof window !== 'undefined' ? navigator.onLine : true);
   const [showVisionInput, setShowVisionInput] = useState(false);
   const [failedMessages, setFailedMessages] = useState([]);
   const [showSettings, setShowSettings] = useState(false);
