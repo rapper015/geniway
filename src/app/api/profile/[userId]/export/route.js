@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
-import { connectDB } from '../../../../../../lib/mongodb';
-import { User } from '../../../../../../models/User';
-import ChatSession from '../../../../../../models/ChatSession';
-import { ChatMessage } from '../../../../../../models/ChatMessage';
+import { connectDB } from '../../../../../../lib/database';
+import { User, ChatSession, ChatMessage } from '../../../../../../models';
 
 // POST - Export user data
 export async function POST(request, { params }) {
@@ -31,9 +29,15 @@ export async function POST(request, { params }) {
     }
 
     // Get user's chat sessions and messages
-    const sessions = await ChatSession.find({ userId: userId.toString() }).sort({ createdAt: -1 });
-    const sessionIds = sessions.map(session => session._id);
-    const messages = await ChatMessage.find({ sessionId: { $in: sessionIds } }).sort({ timestamp: 1 });
+    const sessions = await ChatSession.find({ userId: userId.toString() });
+    const sessionIds = sessions.map(session => session.id);
+    
+    // Get messages for all sessions
+    const messages = [];
+    for (const sessionId of sessionIds) {
+      const sessionMessages = await ChatMessage.find({ sessionId });
+      messages.push(...sessionMessages);
+    }
 
     // Prepare export data
     const exportData = {
@@ -47,7 +51,7 @@ export async function POST(request, { params }) {
         createdAt: user.createdAt
       },
       sessions: sessions.map(session => ({
-        id: session._id,
+        id: session.id,
         subject: session.subject,
         title: session.title,
         messageCount: session.messageCount,

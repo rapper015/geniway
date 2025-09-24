@@ -857,8 +857,8 @@ export function CompleteStepModal({ isOpen, onClose, onSubmit, userData = {} }) 
         }
         
         // Track successful account creation
-        gtmEvents.userOnboardingComplete(data.user._id, completeProfile.email, localStorage.getItem('currentSessionId'));
-        gtmEvents.profileCreated(data.user._id, completeProfile.email, localStorage.getItem('currentSessionId'));
+        gtmEvents.userOnboardingComplete(data.user.id, completeProfile.email, localStorage.getItem('currentSessionId'));
+        gtmEvents.profileCreated(data.user.id, completeProfile.email, localStorage.getItem('currentSessionId'));
         
         // Show success message
         alert(`Account created successfully! Welcome, ${completeProfile.firstName}! Your chat history has been saved.`);

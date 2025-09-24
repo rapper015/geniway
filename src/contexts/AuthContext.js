@@ -27,7 +27,7 @@ export function AuthProvider({ children }) {
         setGuestUser(null);
         
         // Refresh user data from server to get latest information
-        refreshUserData(token, parsedUser._id || parsedUser.id);
+        refreshUserData(token, parsedUser.id || parsedUser.id);
       } catch (error) {
         console.error('Error parsing user data:', error);
         localStorage.removeItem('token');
@@ -174,7 +174,7 @@ export function AuthProvider({ children }) {
     if (token && userData) {
       try {
         const parsedUser = JSON.parse(userData);
-        await refreshUserData(token, parsedUser._id || parsedUser.id);
+        await refreshUserData(token, parsedUser.id || parsedUser.id);
       } catch (error) {
         console.error('AuthContext: Error refreshing user:', error);
       }

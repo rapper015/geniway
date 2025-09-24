@@ -217,7 +217,7 @@ export class GuestUserManager {
       // Prepare migration data
       const migrationData = {
         guestId: guestUser.id,
-        userId: authenticatedUser._id || authenticatedUser.id,
+        userId: authenticatedUser.id || authenticatedUser.id,
         sessions: guestSessions,
         stats: guestStats,
         preferences: guestUser.preferences

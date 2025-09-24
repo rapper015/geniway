@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { connectDB } from '../../../../../lib/mongodb';
+import { connectDB } from '../../../../../lib/database';
 import { User } from '../../../../../models/User';
 import jwt from 'jsonwebtoken';
 
@@ -98,13 +98,16 @@ export async function POST(request) {
       }
     });
 
-    // Save user to database (password will be hashed automatically by pre-save hook)
+    // Hash password before saving
+    await userData.hashPassword();
+    
+    // Save user to database
     const result = await userData.save();
     
     // Create JWT token
     const token = jwt.sign(
       { 
-        userId: result._id.toString(),
+        userId: result.id.toString(),
         email: userData.email,
         role: userData.role
       },
@@ -113,8 +116,45 @@ export async function POST(request) {
     );
 
     // Return user data without password
-    const userResponse = result.toJSON();
-    delete userResponse.password;
+    const userResponse = {
+      id: result.id,
+      email: result.email,
+      name: result.name,
+      firstName: result.firstName,
+      lastName: result.lastName,
+      role: result.role,
+      grade: result.grade,
+      board: result.board,
+      state: result.state,
+      city: result.city,
+      school: result.school,
+      subjects: result.subjects,
+      langPref: result.langPref,
+      teachingLanguage: result.teachingLanguage,
+      pace: result.pace,
+      learningStyle: result.learningStyle,
+      learningStyles: result.learningStyles,
+      contentMode: result.contentMode,
+      fastTrackEnabled: result.fastTrackEnabled,
+      saveChatHistory: result.saveChatHistory,
+      studyStreaksEnabled: result.studyStreaksEnabled,
+      breakRemindersEnabled: result.breakRemindersEnabled,
+      masteryNudgesEnabled: result.masteryNudgesEnabled,
+      dataSharingEnabled: result.dataSharingEnabled,
+      isGuest: result.isGuest,
+      ageBand: result.ageBand,
+      profileCompletionStep: result.profileCompletionStep,
+      profileCompleted: result.profileCompleted,
+      phoneNumber: result.phoneNumber,
+      totalQuestionsAsked: result.totalQuestionsAsked,
+      totalQuizzesCompleted: result.totalQuizzesCompleted,
+      averageQuizScore: result.averageQuizScore,
+      lastActiveSession: result.lastActiveSession,
+      totalSessions: result.totalSessions,
+      preferences: result.preferences,
+      createdAt: result.createdAt,
+      updatedAt: result.updatedAt
+    };
 
     return NextResponse.json(
       { 

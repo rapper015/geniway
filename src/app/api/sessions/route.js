@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { connectDB } from '../../../../lib/mongodb';
-import { default as ChatSession } from '../../../../models/ChatSession';
+import { connectDB } from '../../../../lib/database';
+import { ChatSession } from '../../../../models';
 
 export async function POST(request) {
   try {
@@ -37,20 +37,18 @@ export async function POST(request) {
 
     const session = new ChatSession(sessionData);
 
-    console.log('Session object created:', session);
-
-    await session.save();
+    const savedSession = await session.save();
 
     return NextResponse.json({
       success: true,
-      sessionId: session._id.toString(),
+      sessionId: savedSession.id,
       session: {
-        id: session._id.toString(),
-        userId: session.userId,
-        subject: session.subject,
-        isGuest: session.isGuest,
-        status: session.status,
-        createdAt: session.createdAt
+        id: savedSession.id,
+        userId: savedSession.userId,
+        subject: savedSession.subject,
+        isGuest: savedSession.isGuest,
+        status: savedSession.status,
+        createdAt: savedSession.createdAt
       }
     }, { status: 201 });
 
@@ -83,10 +81,11 @@ export async function GET(request) {
       session = await ChatSession.findById(sessionId);
     } else {
       // Find the most recent active session for the user
-      session = await ChatSession.findOne({ 
+      const sessions = await ChatSession.find({ 
         userId: userId, 
         status: 'active' 
-      }).sort({ createdAt: -1 });
+      });
+      session = sessions.length > 0 ? sessions[0] : null;
     }
 
     if (!session) {
@@ -99,7 +98,7 @@ export async function GET(request) {
     return NextResponse.json({
       success: true,
       session: {
-        id: session._id.toString(),
+        id: session.id,
         userId: session.userId,
         subject: session.subject,
         isGuest: session.isGuest,

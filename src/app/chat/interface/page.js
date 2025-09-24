@@ -158,7 +158,7 @@ export default function ChatInterface() {
           messageType: messageType,
           imageUrl: imageUrl,
           sessionId: currentSession?.id,
-          userId: user?._id,
+          userId: user?.id,
           subject: selectedSubject,
           userName: userName
         }),

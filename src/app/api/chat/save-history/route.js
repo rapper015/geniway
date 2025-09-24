@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { connectDB } from '../../../../../lib/mongodb';
+import { connectDB } from '../../../../../lib/database';
 import { ChatMessage } from '../../../../../models/ChatMessage';
 import jwt from 'jsonwebtoken';
 
@@ -54,7 +54,7 @@ export async function POST(request) {
     const savedMessageIds = [];
     for (const message of messages || []) {
       const chatMessage = new ChatMessage({
-        sessionId: chatSession._id,
+        sessionId: chatSession.id,
         userId: decoded.userId,
         sender: message.type === 'ai' ? 'ai' : 'user',
         messageType: message.messageType || 'text',
@@ -64,7 +64,7 @@ export async function POST(request) {
       });
       
       await chatMessage.save();
-      savedMessageIds.push(chatMessage._id);
+      savedMessageIds.push(chatMessage.id);
     }
 
     // Update session with message references
@@ -76,7 +76,7 @@ export async function POST(request) {
 
     return NextResponse.json({
       success: true,
-      sessionId: chatSession._id,
+      sessionId: chatSession.id,
       messageCount: chatSession.messages.length
     });
 

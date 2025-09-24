@@ -65,7 +65,7 @@ export default function SettingsModal({ isOpen, onClose, trigger, localProfileDa
   // Get effective user ID
   const effectiveUserId = useMemo(() => {
     if (isAuthenticated && user) {
-      const userId = user._id || user.id;
+      const userId = user.id || user.id;
       return userId;
     } else if (isGuest && guestUser) {
       return guestUser.id;
@@ -90,7 +90,7 @@ export default function SettingsModal({ isOpen, onClose, trigger, localProfileDa
       if (isAuthenticated && user) {
         // Use authenticated user data
         profileData = {
-          user_id: user._id || user.id,
+          user_id: user.id || user.id,
           first_name: user.firstName || user.first_name || '',
           last_name: user.lastName || user.last_name || '',
           name: user.name || '',
@@ -116,7 +116,7 @@ export default function SettingsModal({ isOpen, onClose, trigger, localProfileDa
         };
 
         userInfo = {
-          id: user._id || user.id,
+          id: user.id || user.id,
           email: user.email || '',
           role: user.role || 'student',
           name: user.name || 'User'
@@ -200,7 +200,7 @@ export default function SettingsModal({ isOpen, onClose, trigger, localProfileDa
       if (isAuthenticated && user) {
         // Create profile from authenticated user data
         fallbackProfile = {
-          user_id: user._id || user.id,
+          user_id: user.id || user.id,
           first_name: user.firstName || user.first_name || '',
           last_name: user.lastName || user.last_name || '',
           name: user.name || '',
@@ -226,7 +226,7 @@ export default function SettingsModal({ isOpen, onClose, trigger, localProfileDa
         };
         
         fallbackUserInfo = {
-          id: user._id || user.id,
+          id: user.id || user.id,
           email: user.email || '',
           role: user.role || 'student',
           name: user.name || 'User'
@@ -328,7 +328,7 @@ export default function SettingsModal({ isOpen, onClose, trigger, localProfileDa
           
           // Create profile object from user data (for backward compatibility)
           const profileData = {
-            user_id: userData._id || userData.id,
+            user_id: userData.id || userData.id,
             first_name: userData.firstName || '',
             last_name: userData.lastName || '',
             name: userData.name || '',

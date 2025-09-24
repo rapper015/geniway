@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
-import { connectDB } from '../../../../../lib/mongodb';
-import { User } from '../../../../../models/User';
-import ChatSession from '../../../../../models/ChatSession';
-import { ChatMessage } from '../../../../../models/ChatMessage';
-import { UserStats } from '../../../../../models/UserStats';
+import { connectDB } from '../../../../../lib/database';
+import { User, ChatSession, ChatMessage } from '../../../../../models';
+import { UserStats } from '../../../../../models';
 import jwt from 'jsonwebtoken';
 
 export async function POST(request) {
@@ -67,7 +65,7 @@ export async function POST(request) {
         });
 
         const savedSession = await sessionDoc.save();
-        const sessionId = savedSession._id;
+        const sessionId = savedSession.id;
 
         // Migrate messages
         if (session.messages && session.messages.length > 0) {
@@ -133,7 +131,7 @@ export async function POST(request) {
       message: 'Guest data migrated successfully',
       migratedSessions,
       migratedMessages,
-      migrationId: migrationRecord._id
+      migrationId: migrationRecord.id
     });
 
   } catch (error) {

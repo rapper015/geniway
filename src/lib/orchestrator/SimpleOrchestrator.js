@@ -1,9 +1,7 @@
 
-import { connectDB } from '../../../lib/mongodb';
-import ChatSession from '../../../models/ChatSession';
-import { ChatMessage } from '../../../models/ChatMessage';
-import { UserStats } from '../../../models/UserStats';
-import { User } from '../../../models/User';
+import { connectDB } from '../../../lib/database';
+import { ChatSession } from '../../../models';
+import { ChatMessage, UserStats, User } from '../../../models';
 import OpenAI from 'openai';
 
 export class SimpleOrchestrator {
@@ -57,7 +55,7 @@ export class SimpleOrchestrator {
 
       // Add user message
       await this.addMessage({
-        sessionId: session._id.toString(),
+        sessionId: session.id.toString(),
         userId: studentInput.userId,
         sender: 'user',
         messageType: studentInput.type,
@@ -90,7 +88,7 @@ export class SimpleOrchestrator {
       
       // Add AI message
       const aiMessage = await this.addMessage({
-        sessionId: session._id.toString(),
+        sessionId: session.id.toString(),
         userId: studentInput.userId,
         sender: 'ai',
         messageType: 'text',
@@ -113,7 +111,7 @@ export class SimpleOrchestrator {
             isComplete: true
           },
           timestamp: new Date(),
-          sessionId: session._id.toString()
+          sessionId: session.id.toString()
         });
 
         onEvent({
@@ -134,7 +132,7 @@ export class SimpleOrchestrator {
             }
           },
           timestamp: new Date(),
-          sessionId: session._id.toString()
+          sessionId: session.id.toString()
         });
       }
 
@@ -239,7 +237,7 @@ export class SimpleOrchestrator {
       await this.updateMessageStats(messageData.userId, messageData.messageType);
 
       return {
-        id: savedMessage._id.toString(),
+        id: savedMessage.id.toString(),
         sessionId: messageData.sessionId,
         userId: messageData.userId,
         sender: messageData.sender,
@@ -258,7 +256,7 @@ export class SimpleOrchestrator {
   async generateResponse(studentInput, session) {
     try {
       // Get recent conversation history
-      const messages = await this.getRecentMessages(session._id.toString(), 10);
+      const messages = await this.getRecentMessages(session.id.toString(), 10);
       
       // Build conversation context
       const conversationHistory = messages.map(msg => ({
@@ -317,12 +315,13 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
     try {
       await connectDB();
       
-      const messages = await ChatMessage.find({ sessionId })
-        .sort({ createdAt: -1 })
-        .limit(limit);
+      const messages = await ChatMessage.find({ 
+        sessionId,
+        limit: limit
+      });
 
       return messages.map(msg => ({
-        id: msg._id.toString(),
+        id: msg.id.toString(),
         sessionId: msg.sessionId,
         userId: msg.userId,
         sender: msg.sender,
@@ -392,9 +391,10 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
   // Build tutoring context from session and student input
   async buildTutoringContext(session, studentInput) {
     try {
-      const messages = await ChatMessage.find({ sessionId: session._id })
-        .sort({ timestamp: 1 })
-        .limit(10); // Last 10 messages for context
+      const messages = await ChatMessage.find({ 
+        sessionId: session.id,
+        limit: 10
+      }); // Last 10 messages for context
 
       // Fetch user profile information for personalization
       let userProfile = null;
@@ -446,7 +446,7 @@ Respond in a helpful, educational manner. If the student uploaded an image, anal
 
 
       return {
-        sessionId: session._id.toString(),
+        sessionId: session.id.toString(),
         userId: studentInput.userId,
         subject: session.subject || 'general',
         currentInput: studentInput.text,

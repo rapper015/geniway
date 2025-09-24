@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { connectDB } from '../../../../lib/mongodb';
+import { connectDB } from '../../../../lib/database';
 import { User } from '../../../../models/User';
 import jwt from 'jsonwebtoken';
 
@@ -30,7 +30,7 @@ export async function GET(request) {
     await connectDB();
 
     // Get user data
-    const user = await User.findById(decoded.userId).select('-password');
+    const user = await User.findById(decoded.userId);
     
     if (!user) {
       return NextResponse.json(

@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
-import { connectDB } from '../../../../../lib/mongodb';
-import ChatSession from '../../../../../models/ChatSession';
-import { ChatMessage } from '../../../../../models/ChatMessage';
-import { UserStats } from '../../../../../models/UserStats';
+import { connectDB } from '../../../../../lib/database';
+import { ChatSession, ChatMessage } from '../../../../../models';
+import { UserStats } from '../../../../../models';
 
 export async function DELETE(request) {
   try {
@@ -19,7 +18,7 @@ export async function DELETE(request) {
 
     // Get all sessions for the user
     const sessions = await ChatSession.find({ userId });
-    const sessionIds = sessions.map(session => session._id);
+    const sessionIds = sessions.map(session => session.id);
 
     // Delete all messages for these sessions
     const messageDeleteResult = await ChatMessage.deleteMany({

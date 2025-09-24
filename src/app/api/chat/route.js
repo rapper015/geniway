@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
 import { openaiService } from '../../../lib/openaiService';
-import { connectDB } from '../../../../lib/mongodb';
-import ChatSession from '../../../../models/ChatSession';
-import { ChatMessage } from '../../../../models/ChatMessage';
-import { UserStats } from '../../../../models/UserStats';
-import { User } from '../../../../models/User';
+import { connectDB } from '../../../../lib/database';
+import { ChatSession } from '../../../../models';
+import { ChatMessage, UserStats, User } from '../../../../models';
 import jwt from 'jsonwebtoken';
 
 // Configure API route to handle larger payloads
@@ -70,7 +68,7 @@ export async function POST(request) {
 
     // Create user message
     const userMessage = new ChatMessage({
-      sessionId: session._id,
+      sessionId: session.id,
       userId: userId || 'anonymous',
       sender: 'user',
       messageType: messageType || 'text',
@@ -86,22 +84,20 @@ export async function POST(request) {
     session.lastActive = new Date();
     await session.save();
 
-    // Update user stats
-    if (userId) {
-      await UserStats.findOneAndUpdate(
-        { userId: userId },
-        {
-          $inc: {
-            totalMessages: 1,
-            totalTextMessages: messageType === 'text' ? 1 : 0,
-            totalVoiceMessages: messageType === 'voice' ? 1 : 0,
-            totalImageMessages: messageType === 'image' ? 1 : 0
-          },
-          $set: { lastActivity: new Date() }
-        },
-        { upsert: true }
-      );
-    }
+     // Update user stats
+     if (userId) {
+       await UserStats.findOneAndUpdate(
+         { userId: userId },
+         {
+           totalMessages: 1,
+           totalTextMessages: messageType === 'text' ? 1 : 0,
+           totalVoiceMessages: messageType === 'voice' ? 1 : 0,
+           totalImageMessages: messageType === 'image' ? 1 : 0,
+           lastActive: new Date()
+         },
+         { upsert: true }
+       );
+     }
 
     // Generate AI response
     let aiResponse;
@@ -124,7 +120,7 @@ export async function POST(request) {
 
     // Create AI message
     const aiMessage = new ChatMessage({
-      sessionId: session._id,
+      sessionId: session.id,
       userId: userId || 'anonymous',
       sender: 'ai',
       messageType: 'text',
@@ -144,35 +140,36 @@ export async function POST(request) {
     session.lastActive = new Date();
     await session.save();
 
-    // Update user stats for AI response
-    if (userId) {
-      await UserStats.findOneAndUpdate(
-        { userId: userId },
-        {
-          $inc: { totalMessages: 1, totalTextMessages: 1 },
-          $set: { lastActivity: new Date() }
-        },
-        { upsert: true }
-      );
-    }
+     // Update user stats for AI response
+     if (userId) {
+       await UserStats.findOneAndUpdate(
+         { userId: userId },
+         {
+           totalMessages: 1,
+           totalTextMessages: 1,
+           lastActive: new Date()
+         },
+         { upsert: true }
+       );
+     }
 
     return NextResponse.json({
       success: true,
       userMessage: {
-        id: userMessage._id,
+        id: userMessage.id,
         content: userMessage.content,
         messageType: userMessage.messageType,
         imageUrl: userMessage.imageUrl,
         timestamp: userMessage.timestamp
       },
       aiMessage: {
-        id: aiMessage._id,
+        id: aiMessage.id,
         content: aiMessage.content,
         messageType: aiMessage.messageType,
         timestamp: aiMessage.timestamp,
         metadata: aiMessage.metadata
       },
-      sessionId: session._id
+      sessionId: session.id
     });
 
   } catch (error) {

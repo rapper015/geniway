@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { connectDB } from '../../../../../lib/mongodb';
+import { connectDB } from '../../../../../lib/database';
 import { UserStats } from '../../../../../models/UserStats';
 import jwt from 'jsonwebtoken';
 
@@ -30,7 +30,7 @@ export async function GET(request) {
     await connectDB();
 
     // Get user statistics
-    const userStats = await UserStats.findOne({ userId: decoded.userId }).lean();
+    const userStats = await UserStats.findOne({ userId: decoded.userId });
 
     if (!userStats) {
       // Return default stats if no stats found

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { connectDB } from '../../../../../lib/mongodb';
+import { connectDB } from '../../../../../lib/database';
 import { User } from '../../../../../models/User';
 import jwt from 'jsonwebtoken';
 
@@ -109,12 +109,17 @@ export async function POST(request) {
       }
     });
 
+    // Hash password if provided
+    if (password) {
+      await user.hashPassword();
+    }
+    
     await user.save();
 
     // Generate JWT token
     const token = jwt.sign(
       { 
-        userId: user._id, 
+        userId: user.id, 
         email: user.email,
         isGuest: user.isGuest 
       },
@@ -123,7 +128,45 @@ export async function POST(request) {
     );
 
     // Return user data without password
-    const userResponse = user.toJSON();
+    const userResponse = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      role: user.role,
+      grade: user.grade,
+      board: user.board,
+      state: user.state,
+      city: user.city,
+      school: user.school,
+      subjects: user.subjects,
+      langPref: user.langPref,
+      teachingLanguage: user.teachingLanguage,
+      pace: user.pace,
+      learningStyle: user.learningStyle,
+      learningStyles: user.learningStyles,
+      contentMode: user.contentMode,
+      fastTrackEnabled: user.fastTrackEnabled,
+      saveChatHistory: user.saveChatHistory,
+      studyStreaksEnabled: user.studyStreaksEnabled,
+      breakRemindersEnabled: user.breakRemindersEnabled,
+      masteryNudgesEnabled: user.masteryNudgesEnabled,
+      dataSharingEnabled: user.dataSharingEnabled,
+      isGuest: user.isGuest,
+      ageBand: user.ageBand,
+      profileCompletionStep: user.profileCompletionStep,
+      profileCompleted: user.profileCompleted,
+      phoneNumber: user.phoneNumber,
+      totalQuestionsAsked: user.totalQuestionsAsked,
+      totalQuizzesCompleted: user.totalQuizzesCompleted,
+      averageQuizScore: user.averageQuizScore,
+      lastActiveSession: user.lastActiveSession,
+      totalSessions: user.totalSessions,
+      preferences: user.preferences,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
+    };
 
     return NextResponse.json({
       success: true,

@@ -1,8 +1,5 @@
-import { connectDB } from '../../../lib/mongodb';
-import ChatSession from '../../../models/ChatSession';
-import { ChatMessage } from '../../../models/ChatMessage';
-import { UserStats } from '../../../models/UserStats';
-import { User } from '../../../models/User';
+import { connectDB } from '../../../lib/database';
+import { ChatSession, ChatMessage, UserStats, User } from '../../../models';
 
 export class DatabaseStateManager {
   constructor() {
@@ -32,9 +29,10 @@ export class DatabaseStateManager {
         return null;
       }
 
-      const messages = await ChatMessage.find({ sessionId })
-        .sort({ createdAt: 1 })
-        .limit(100); // Limit to last 100 messages for performance
+      const messages = await ChatMessage.find({ 
+        sessionId,
+        limit: 100
+      }); // Limit to last 100 messages for performance
 
       // Fetch user profile
       const user = await User.findById(session.userId);
@@ -82,7 +80,7 @@ export class DatabaseStateManager {
       // Initialize user stats if not exists
       await this.ensureUserStats(userId);
       
-      return savedSession._id.toString();
+      return savedSession.id.toString();
     } catch (error) {
       console.error('Error creating session:', error);
       throw error;
@@ -113,9 +111,10 @@ export class DatabaseStateManager {
     try {
       await connectDB();
       
-      const messages = await ChatMessage.find({ sessionId })
-        .sort({ createdAt: -1 })
-        .limit(limit);
+      const messages = await ChatMessage.find({ 
+        sessionId,
+        limit: limit
+      });
 
       return messages.map(msg => this.mapMessageToContext(msg)).reverse();
     } catch (error) {
@@ -153,7 +152,7 @@ export class DatabaseStateManager {
       this.invalidateCache(messageData.sessionId);
 
       return {
-        id: savedMessage._id.toString(),
+        id: savedMessage.id.toString(),
         sessionId: messageData.sessionId,
         userId: messageData.userId,
         sender: messageData.sender,
@@ -219,7 +218,7 @@ export class DatabaseStateManager {
   // Helper methods
   mapUserToProfile(user) {
     return {
-      id: user._id.toString(),
+      id: user.id.toString(),
       name: user.name,
       email: user.email,
       role: user.role,
@@ -231,7 +230,7 @@ export class DatabaseStateManager {
 
   mapMessageToContext(message) {
     return {
-      id: message._id.toString(),
+      id: message.id.toString(),
       sessionId: message.sessionId,
       userId: message.userId,
       sender: message.sender,

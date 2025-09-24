@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
-import { connectDB } from '../../../../../lib/mongodb';
-import { User } from '../../../../../models/User';
-import ChatSession from '../../../../../models/ChatSession';
-import { ChatMessage } from '../../../../../models/ChatMessage';
-import { UserStats } from '../../../../../models/UserStats';
+import { connectDB } from '../../../../../lib/database';
+import { User, ChatSession, ChatMessage } from '../../../../../models';
+import { UserStats } from '../../../../../models';
 
 export async function POST(request) {
   try {
@@ -28,11 +26,15 @@ export async function POST(request) {
     }
 
     // Get user's chat sessions and messages
-    const sessions = await ChatSession.find({ userId }).sort({ createdAt: -1 });
-    const sessionIds = sessions.map(session => session._id);
-    const messages = await ChatMessage.find({ 
-      sessionId: { $in: sessionIds } 
-    }).sort({ createdAt: 1 });
+    const sessions = await ChatSession.find({ userId });
+    const sessionIds = sessions.map(session => session.id);
+    
+    // Get messages for all sessions
+    const messages = [];
+    for (const sessionId of sessionIds) {
+      const sessionMessages = await ChatMessage.find({ sessionId });
+      messages.push(...sessionMessages);
+    }
 
     // Get user stats
     const stats = await UserStats.findOne({ userId });
@@ -48,7 +50,7 @@ export async function POST(request) {
       },
       stats: stats || {},
       sessions: sessions.map(session => ({
-        id: session._id,
+        id: session.id,
         subject: session.subject,
         title: session.title,
         messageCount: session.messageCount,
@@ -56,7 +58,7 @@ export async function POST(request) {
         lastActive: session.lastActive
       })),
       messages: messages.map(message => ({
-        id: message._id,
+        id: message.id,
         sessionId: message.sessionId,
         sender: message.sender,
         type: message.messageType,

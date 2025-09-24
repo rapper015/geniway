@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { connectDB } from '../../../../../lib/mongodb';
+import { connectDB } from '../../../../../lib/database';
 import { User } from '../../../../../models/User';
 
 // GET - Load user profile
@@ -26,7 +26,7 @@ export async function GET(request, { params }) {
 
     // Transform user data to match frontend expectations
     const profile = {
-      user_id: user._id.toString(),
+      user_id: user.id.toString(),
       first_name: user.firstName || user.name?.split(' ')[0] || '',
       last_name: user.lastName || user.name?.split(' ').slice(1).join(' ') || '',
       name: user.name || '',
@@ -67,8 +67,8 @@ export async function GET(request, { params }) {
     };
 
     const userData = {
-      _id: user._id.toString(),
-      id: user._id.toString(),
+      _id: user.id.toString(),
+      id: user.id.toString(),
       email: user.email,
       name: user.name,
       firstName: user.firstName,
@@ -186,9 +186,8 @@ export async function PATCH(request, { params }) {
 
     // Update the user
     const updatedUser = await User.findByIdAndUpdate(
-      user._id,
-      { $set: mappedUpdates },
-      { new: true, runValidators: true }
+      user.id,
+      mappedUpdates
     );
 
     if (!updatedUser) {
@@ -197,7 +196,7 @@ export async function PATCH(request, { params }) {
 
     // Return updated profile data
     const profile = {
-      user_id: updatedUser._id.toString(),
+      user_id: updatedUser.id.toString(),
       first_name: updatedUser.firstName || updatedUser.name?.split(' ')[0] || '',
       last_name: updatedUser.lastName || updatedUser.name?.split(' ').slice(1).join(' ') || '',
       name: updatedUser.name || '',
@@ -238,8 +237,8 @@ export async function PATCH(request, { params }) {
     };
 
     const userData = {
-      _id: updatedUser._id.toString(),
-      id: updatedUser._id.toString(),
+      _id: updatedUser.id.toString(),
+      id: updatedUser.id.toString(),
       email: updatedUser.email,
       name: updatedUser.name,
       firstName: updatedUser.firstName,

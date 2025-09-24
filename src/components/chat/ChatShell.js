@@ -291,8 +291,8 @@ export default function ChatShell({ subject, onBack }) {
   useEffect(() => {
     
     if (isAuthenticated && user) {
-      // Use user._id if available (from database), otherwise use user.id
-      const userIdToSet = user._id || user.id;
+      // Use user.id if available (from database), otherwise use user.id
+      const userIdToSet = user.id || user.id;
       setUserId(userIdToSet);
     } else if (isGuest && guestUser) {
       setUserId(guestUser.id);
@@ -302,7 +302,7 @@ export default function ChatShell({ subject, onBack }) {
       if (storedUser) {
         try {
           const userData = JSON.parse(storedUser);
-          const userIdToSet = userData._id || userData.id;
+          const userIdToSet = userData.id || userData.id;
           setUserId(userIdToSet);
         } catch (error) {
           console.error('[ChatShell] Error parsing stored user:', error);
@@ -476,7 +476,7 @@ export default function ChatShell({ subject, onBack }) {
     
     // Track chat session start event for first message
     if (messages.length === 0) {
-      const profileId = isAuthenticated ? user?.id || user?._id : guestUser?.id;
+      const profileId = isAuthenticated ? user?.id || user?.id : guestUser?.id;
       gtmEvents.chatSessionStart(profileId, currentSessionId);
     }
 
