@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { openaiService } from '../../../lib/openaiService';
 import { connectDB } from '../../../../lib/mongodb';
-import ChatSessionNew from '../../../../models/ChatSessionNew';
+import ChatSession from '../../../../models/ChatSession';
 import { ChatMessage } from '../../../../models/ChatMessage';
 import { UserStats } from '../../../../models/UserStats';
 import { User } from '../../../../models/User';
@@ -60,7 +60,7 @@ export async function POST(request) {
     }
 
     // Get or create session
-    let session = await ChatSessionNew.findById(sessionId);
+    let session = await ChatSession.findById(sessionId);
     if (!session) {
       return NextResponse.json(
         { error: 'Session not found' },

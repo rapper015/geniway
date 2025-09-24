@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectDB } from '../../../../../lib/mongodb';
 import { User } from '../../../../../models/User';
-import ChatSessionNew from '../../../../../models/ChatSessionNew';
+import ChatSession from '../../../../../models/ChatSession';
 import { ChatMessage } from '../../../../../models/ChatMessage';
 import { UserStats } from '../../../../../models/UserStats';
 import jwt from 'jsonwebtoken';
@@ -57,7 +57,7 @@ export async function POST(request) {
     if (sessions && sessions.length > 0) {
       for (const session of sessions) {
         // Create session document
-        const sessionDoc = new ChatSessionNew({
+        const sessionDoc = new ChatSession({
           userId: userId,
           subject: session.subject,
           title: session.title || 'Migrated Chat',

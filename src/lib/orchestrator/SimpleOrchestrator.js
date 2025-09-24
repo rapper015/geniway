@@ -1,6 +1,6 @@
 
 import { connectDB } from '../../../lib/mongodb';
-import ChatSessionNew from '../../../models/ChatSessionNew';
+import ChatSession from '../../../models/ChatSession';
 import { ChatMessage } from '../../../models/ChatMessage';
 import { UserStats } from '../../../models/UserStats';
 import { User } from '../../../models/User';
@@ -181,7 +181,7 @@ export class SimpleOrchestrator {
   async getSession(sessionId) {
     try {
       await connectDB();
-      return await ChatSessionNew.findById(sessionId);
+      return await ChatSession.findById(sessionId);
     } catch (error) {
       console.error('Error getting session:', error);
       return null;
@@ -192,7 +192,7 @@ export class SimpleOrchestrator {
     try {
       await connectDB();
       
-      const session = new ChatSessionNew({
+      const session = new ChatSession({
         userId,
         subject,
         title: `Chat - ${new Date().toLocaleDateString()}`,
@@ -230,7 +230,7 @@ export class SimpleOrchestrator {
       const savedMessage = await message.save();
 
       // Update session message count
-      await ChatSessionNew.findByIdAndUpdate(messageData.sessionId, {
+      await ChatSession.findByIdAndUpdate(messageData.sessionId, {
         $inc: { messageCount: 1 },
         lastActive: new Date()
       });

@@ -60,11 +60,11 @@ export class ContextRecovery {
   // Recover context from database
   async recoverFromDatabase(sessionId, userId, subject) {
     try {
-      const ChatSessionNew = (await import('../../models/ChatSessionNew')).default;
+      const ChatSession = (await import('../../models/ChatSession')).default;
       const { ChatMessage } = await import('../../models/ChatMessage');
 
       // Try to find session
-      const session = await ChatSessionNew.findById(sessionId);
+      const session = await ChatSession.findById(sessionId);
       if (!session) {
         return null;
       }

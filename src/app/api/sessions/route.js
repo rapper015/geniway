@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { connectDB } from '../../../../lib/mongodb';
-import { ChatSessionNew } from '../../../../models';
+import { default as ChatSession } from '../../../../models/ChatSession';
 
 export async function POST(request) {
   try {
@@ -35,7 +35,7 @@ export async function POST(request) {
       }
     };
 
-    const session = new ChatSessionNew(sessionData);
+    const session = new ChatSession(sessionData);
 
     console.log('Session object created:', session);
 
@@ -80,10 +80,10 @@ export async function GET(request) {
 
     let session;
     if (sessionId) {
-      session = await ChatSessionNew.findById(sessionId);
+      session = await ChatSession.findById(sessionId);
     } else {
       // Find the most recent active session for the user
-      session = await ChatSessionNew.findOne({ 
+      session = await ChatSession.findOne({ 
         userId: userId, 
         status: 'active' 
       }).sort({ createdAt: -1 });

@@ -1,5 +1,5 @@
 import { connectDB } from '../../../lib/mongodb';
-import ChatSessionNew from '../../../models/ChatSessionNew';
+import ChatSession from '../../../models/ChatSession';
 import { ChatMessage } from '../../../models/ChatMessage';
 import { UserStats } from '../../../models/UserStats';
 import { User } from '../../../models/User';
@@ -27,7 +27,7 @@ export class DatabaseStateManager {
       await connectDB();
       
       // Fetch session and messages from database
-      const session = await ChatSessionNew.findById(sessionId);
+      const session = await ChatSession.findById(sessionId);
       if (!session) {
         return null;
       }
@@ -68,7 +68,7 @@ export class DatabaseStateManager {
     try {
       await connectDB();
       
-      const session = new ChatSessionNew({
+      const session = new ChatSession({
         userId,
         subject,
         title: `Chat - ${new Date().toLocaleDateString()}`,
@@ -94,7 +94,7 @@ export class DatabaseStateManager {
       await connectDB();
       
       // Update session
-      await ChatSessionNew.findByIdAndUpdate(sessionId, {
+      await ChatSession.findByIdAndUpdate(sessionId, {
         lastActive: new Date(),
         ...updates
       });
@@ -141,7 +141,7 @@ export class DatabaseStateManager {
       const savedMessage = await message.save();
 
       // Update session message count
-      await ChatSessionNew.findByIdAndUpdate(messageData.sessionId, {
+      await ChatSession.findByIdAndUpdate(messageData.sessionId, {
         $inc: { messageCount: 1 },
         lastActive: new Date()
       });
@@ -173,7 +173,7 @@ export class DatabaseStateManager {
       await connectDB();
       
       // Update session status
-      await ChatSessionNew.findByIdAndUpdate(sessionId, {
+      await ChatSession.findByIdAndUpdate(sessionId, {
         status: 'archived',
         lastActive: new Date()
       });
