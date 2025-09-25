@@ -305,41 +305,41 @@ export default function ChatInterface() {
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-gradient-to-r from-blue-600 to-cyan-500 p-4 shadow-lg">
+      <header className="bg-gradient-to-r from-blue-600 to-cyan-500 p-2 sm:p-4 shadow-lg">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 sm:gap-3 min-w-0 flex-1">
             <button
               onClick={handleBackClick}
-              className="p-2 hover:bg-white/10 rounded-full transition-colors"
+              className="p-1 sm:p-2 hover:bg-white/10 rounded-full transition-colors flex-shrink-0"
             >
-              <ArrowLeft className="w-5 h-5 text-white" />
+              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </button>
-            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-              <BookOpen className="w-6 h-6 text-white" />
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+              <BookOpen className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
-            <div>
-              <h1 className="text-lg font-semibold text-white">Geni Ma'am</h1>
-              <p className="text-sm text-white/80">{getSubjectName(selectedSubject)}</p>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-sm sm:text-lg font-semibold text-white truncate">Geni Ma'am</h1>
+              <p className="text-xs sm:text-sm text-white/80 truncate">{getSubjectName(selectedSubject)}</p>
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
             <button
               onClick={() => setShowStats(true)}
-              className="p-2 hover:bg-white/10 rounded-full transition-colors"
+              className="p-1 sm:p-2 hover:bg-white/10 rounded-full transition-colors"
               title="View Chat Statistics"
             >
-              <BarChart3 className="w-4 h-4 text-white" />
+              <BarChart3 className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
             </button>
-          <div className="flex items-center gap-2 text-white/80">
-            <User className="w-4 h-4" />
-            <span className="text-sm">{userName}</span>
-            {isGuestMode && (
-              <span className="text-xs bg-yellow-500 text-white px-2 py-1 rounded-full">
-                Guest
-              </span>
-            )}
-          </div>
+            <div className="flex items-center gap-1 sm:gap-2 text-white/80">
+              <User className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="text-xs sm:text-sm truncate max-w-20 sm:max-w-none">{userName}</span>
+              {isGuestMode && (
+                <span className="text-xs bg-yellow-500 text-white px-1 sm:px-2 py-1 rounded-full">
+                  Guest
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </header>

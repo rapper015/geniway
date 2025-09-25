@@ -35,9 +35,13 @@ export function AuthProvider({ children }) {
       }
     } else {
       // Initialize guest user if no authenticated user
-      const guest = guestUserManager.getGuestUser();
-      // console.log('AuthContext: Setting guest user:', guest);
-      setGuestUser(guest);
+      guestUserManager.getGuestUser().then(guest => {
+        // console.log('AuthContext: Setting guest user:', guest);
+        setGuestUser(guest);
+      }).catch(error => {
+        console.error('Error getting guest user:', error);
+        setGuestUser(null);
+      });
     }
     
     setLoading(false);
@@ -95,8 +99,12 @@ export function AuthProvider({ children }) {
         } else {
           console.log('AuthContext: Cross-window logout detected');
           setUser(null);
-          const guest = guestUserManager.getGuestUser();
-          setGuestUser(guest);
+          guestUserManager.getGuestUser().then(guest => {
+            setGuestUser(guest);
+          }).catch(error => {
+            console.error('Error getting guest user:', error);
+            setGuestUser(null);
+          });
         }
       }
     };
@@ -163,8 +171,12 @@ export function AuthProvider({ children }) {
     syncService.instance.handleLogout();
     
     // Initialize guest user after logout
-    const guest = guestUserManager.getGuestUser();
-    setGuestUser(guest);
+    guestUserManager.getGuestUser().then(guest => {
+      setGuestUser(guest);
+    }).catch(error => {
+      console.error('Error getting guest user:', error);
+      setGuestUser(null);
+    });
   };
 
   const refreshUser = async () => {

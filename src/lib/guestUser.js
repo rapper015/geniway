@@ -1,25 +1,33 @@
 // Guest User Management System
 // Handles guest user data storage and migration to authenticated user
+// Now syncs with database for real-time updates
 
 export class GuestUserManager {
   constructor() {
     this.guestKey = 'geniway_guest_user';
     this.guestChatKey = 'geniway_guest_chat';
     this.guestStatsKey = 'geniway_guest_stats';
+    this.guestCreatedKey = 'geniway_guest_created';
   }
 
   // Generate a unique guest ID
   generateGuestId() {
+    // Use crypto.randomUUID() if available, otherwise fallback to timestamp-based ID
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    // Fallback for environments without crypto.randomUUID
     return `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
   // Get or create guest user
-  getGuestUser() {
+  async getGuestUser() {
     try {
       let guestUser = localStorage.getItem(this.guestKey);
+      const guestCreated = localStorage.getItem(this.guestCreatedKey);
       
-      if (!guestUser) {
-        // Create new guest user
+      if (!guestUser || !guestCreated) {
+        // Only create new guest for new browsers (not on every page load)
         const newGuest = {
           id: this.generateGuestId(),
           name: 'Guest User',
@@ -34,7 +42,35 @@ export class GuestUserManager {
           }
         };
         
+        // Create guest in database
+        try {
+          const response = await fetch('/api/guest', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              guestId: newGuest.id,
+              userAgent: navigator.userAgent,
+              timestamp: new Date().toISOString()
+            })
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            // Use the guest data from database
+            guestUser = result.guest;
+            localStorage.setItem(this.guestKey, JSON.stringify(guestUser));
+            localStorage.setItem(this.guestCreatedKey, 'true');
+            return guestUser;
+          }
+        } catch (dbError) {
+          console.warn('Failed to create guest in database, using localStorage only:', dbError);
+        }
+        
+        // Fallback to localStorage if database fails
         localStorage.setItem(this.guestKey, JSON.stringify(newGuest));
+        localStorage.setItem(this.guestCreatedKey, 'true');
         return newGuest;
       }
       
@@ -51,9 +87,9 @@ export class GuestUserManager {
   }
 
   // Update guest user info
-  updateGuestUser(updates) {
+  async updateGuestUser(updates) {
     try {
-      const guestUser = this.getGuestUser();
+      const guestUser = await this.getGuestUser();
       if (!guestUser) return false;
 
       const updatedUser = {
@@ -62,10 +98,83 @@ export class GuestUserManager {
         lastActive: new Date().toISOString()
       };
 
+      // Update in database (no authentication required)
+      try {
+        const response = await fetch('/api/guest', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            guestId: guestUser.id,
+            updateData: updates
+          })
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          // Use the updated data from database
+          localStorage.setItem(this.guestKey, JSON.stringify(result.guest));
+          return result.guest;
+        }
+      } catch (dbError) {
+        console.warn('Failed to update guest in database, using localStorage only:', dbError);
+      }
+
+      // Fallback to localStorage if database fails
       localStorage.setItem(this.guestKey, JSON.stringify(updatedUser));
       return updatedUser;
     } catch (error) {
       console.error('Error updating guest user:', error);
+      return false;
+    }
+  }
+
+  // Sync all localStorage guest data with database
+  async syncAllGuestDataToDatabase() {
+    try {
+      const guestUser = await this.getGuestUser();
+      if (!guestUser) return false;
+
+      // Get all localStorage guest data
+      const guestProfile = JSON.parse(localStorage.getItem('guestProfile') || '{}');
+      const guestChat = JSON.parse(localStorage.getItem('geniway_guest_chat') || '[]');
+      const guestStats = JSON.parse(localStorage.getItem('geniway_guest_stats') || '{}');
+
+      // Combine all guest data
+      const allGuestData = {
+        ...guestUser,
+        ...guestProfile,
+        // Add any other localStorage data that should be synced
+        lastActive: new Date().toISOString()
+      };
+
+      // Sync to database using the comprehensive sync endpoint
+      try {
+        const response = await fetch('/api/guest/sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            guestId: guestUser.id,
+            localStorageData: allGuestData
+          })
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          // Update localStorage with the synced data from database
+          localStorage.setItem(this.guestKey, JSON.stringify(result.guest));
+          return result.guest;
+        }
+      } catch (dbError) {
+        console.warn('Failed to sync all guest data to database:', dbError);
+      }
+
+      return guestUser;
+    } catch (error) {
+      console.error('Error syncing all guest data:', error);
       return false;
     }
   }
@@ -267,6 +376,7 @@ export class GuestUserManager {
       localStorage.removeItem(this.guestKey);
       localStorage.removeItem(this.guestChatKey);
       localStorage.removeItem(this.guestStatsKey);
+      localStorage.removeItem(this.guestCreatedKey);
       return true;
     } catch (error) {
       console.error('Error clearing guest data:', error);

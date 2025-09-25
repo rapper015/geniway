@@ -630,6 +630,18 @@ export default function ChatShell({ subject, onBack }) {
         // Save name data and encourage user to ask another question
         localStorage.setItem('guestProfile', JSON.stringify(updatedProfile));
         
+        // Sync to database for guests
+        try {
+          const { guestUserManager } = await import('../../lib/guestUser');
+          await guestUserManager.updateGuestUser({
+            firstName: firstName,
+            lastName: lastName,
+            name: `${firstName} ${lastName}`
+          });
+        } catch (error) {
+          console.warn('Failed to sync guest name to database:', error);
+        }
+        
         // Update user profile in local state
         updateUserProfile({
           firstName: firstName,
@@ -657,6 +669,17 @@ export default function ChatShell({ subject, onBack }) {
         
         // Save first name and encourage user to ask another question
         localStorage.setItem('guestProfile', JSON.stringify(updatedProfile));
+        
+        // Sync to database for guests
+        try {
+          const { guestUserManager } = await import('../../lib/guestUser');
+          await guestUserManager.updateGuestUser({
+            firstName: firstName,
+            name: firstName
+          });
+        } catch (error) {
+          console.warn('Failed to sync guest name to database:', error);
+        }
         
         // Update user profile in local state
         updateUserProfile({
@@ -1732,66 +1755,54 @@ export default function ChatShell({ subject, onBack }) {
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-gradient-to-r from-blue-600 to-blue-500 p-4 fixed top-0 w-full z-10 shadow-md">
+      <header className="bg-gradient-to-r from-blue-600 to-blue-500 p-2 sm:p-4 fixed top-0 w-full z-10 shadow-md">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 sm:gap-3 min-w-0 flex-1">
             <button
               onClick={handleBackClick}
-              className="h-8 w-8 text-white hover:bg-white/10 hover:scale-[1.02] active:scale-[0.99] focus:ring-2 focus:ring-white/20 focus:ring-offset-1 transition-all duration-200 ease-in-out shadow-sm rounded-lg flex items-center justify-center"
+              className="h-7 w-7 sm:h-8 sm:w-8 text-white hover:bg-white/10 hover:scale-[1.02] active:scale-[0.99] focus:ring-2 focus:ring-white/20 focus:ring-offset-1 transition-all duration-200 ease-in-out shadow-sm rounded-lg flex items-center justify-center flex-shrink-0"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
-            <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
-              <img src="/genimam.png" alt="" />
+            <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+              <img src="/genimam.png" alt="" className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
-              <h1 className="text-lg font-semibold text-white">Geni Ma’am</h1>
-              <p className="text-sm text-white/80">AI Doubt Solver</p>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-sm sm:text-lg font-semibold text-white truncate">Geni Ma'am</h1>
+              <p className="text-xs sm:text-sm text-white/80 truncate">AI Doubt Solver</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Debug button to test quick actions */}
-            {/* <button
-              onClick={() => {
-                console.log('[ChatShell] Debug: Force showing quick actions');
-                setHideQuickActions(false);
-                setIsStreaming(false);
-              }}
-              className="px-3 py-1 text-xs bg-white/20 text-white rounded hover:bg-white/30"
-            >
-              Show Quick Actions
-            </button> */}
-            
-            {/* Network status */}
-            <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full ${
+          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+            {/* Network status - hide text on very small screens */}
+            <div className={`flex items-center gap-1 text-xs px-1 sm:px-2 py-1 rounded-full ${
               isOnline
                 ? "bg-white/20 text-white"
                 : "bg-red-500/20 text-red-100"
             }`}>
               {isOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-              {isOnline ? "Online" : "Offline"}
+              <span className="hidden sm:inline">{isOnline ? "Online" : "Offline"}</span>
             </div>
 
             <button
               onClick={() => setIsHistoryOpen(true)}
-              className="h-8 w-8 text-white hover:bg-white/10 hover:scale-[1.02] active:scale-[0.99] focus:ring-2 focus:ring-white/20 focus:ring-offset-1 transition-all duration-200 ease-in-out shadow-sm rounded-lg flex items-center justify-center"
+              className="h-7 w-7 sm:h-8 sm:w-8 text-white hover:bg-white/10 hover:scale-[1.02] active:scale-[0.99] focus:ring-2 focus:ring-white/20 focus:ring-offset-1 transition-all duration-200 ease-in-out shadow-sm rounded-lg flex items-center justify-center"
             >
-              <History className="w-4 h-4" />
+              <History className="w-3 h-3 sm:w-4 sm:h-4" />
             </button>
 
             <button
               onClick={() => setShowSettings(true)}
-              className="h-8 w-8 text-white hover:bg-white/10 hover:scale-[1.02] active:scale-[0.99] focus:ring-2 focus:ring-white/20 focus:ring-offset-1 transition-all duration-200 ease-in-out shadow-sm rounded-lg flex items-center justify-center"
+              className="h-7 w-7 sm:h-8 sm:w-8 text-white hover:bg-white/10 hover:scale-[1.02] active:scale-[0.99] focus:ring-2 focus:ring-white/20 focus:ring-offset-1 transition-all duration-200 ease-in-out shadow-sm rounded-lg flex items-center justify-center"
             >
-              <Settings className="h-4 w-4" />
+              <Settings className="h-3 w-3 sm:h-4 sm:w-4" />
             </button>
           </div>
         </div>
       </header>
 
       {/* Main chat area */}
-      <div className="flex-1 flex flex-col relative pt-20 pb-32">
+      <div className="flex-1 flex flex-col relative pt-16 sm:pt-20 pb-32">
         <MessageList
           messages={messages}
           isStreaming={isStreaming}

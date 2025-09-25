@@ -401,44 +401,45 @@ export default function EnhancedChatInterface({ subject, onBack }) {
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200 p-4">
+      <div className="bg-white shadow-sm border-b border-gray-200 p-2 sm:p-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 sm:gap-3 min-w-0 flex-1">
             <button
               onClick={onBack}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-1 sm:p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
             >
-              ←
+              <span className="text-lg sm:text-xl">←</span>
             </button>
-            <div className="flex items-center gap-2">
-              <BookOpen className="w-6 h-6 text-blue-600" />
-              <div>
-                <h1 className="text-lg font-semibold text-gray-900">
+            <div className="flex items-center gap-1 sm:gap-2 min-w-0 flex-1">
+              <BookOpen className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <h1 className="text-sm sm:text-lg font-semibold text-gray-900 truncate">
                   {subject ? `${subject} Chat` : 'AI Tutor Chat'}
                 </h1>
-                <p className="text-sm text-gray-500">
+                <p className="text-xs sm:text-sm text-gray-500 truncate">
                   {isAuthenticated ? user.name : (isGuest ? guestUser.name : 'Guest')}
                 </p>
               </div>
             </div>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
             <button
               onClick={() => setShowQuickActions(!showQuickActions)}
-              className={`px-3 py-1 rounded-lg text-sm transition-colors ${
+              className={`px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm transition-colors ${
                 showQuickActions 
                   ? 'bg-blue-100 text-blue-700' 
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              Quick Actions
+              <span className="hidden sm:inline">Quick Actions</span>
+              <span className="sm:hidden">QA</span>
             </button>
             <button
               onClick={() => setShowSettings(true)}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-1 sm:p-2 hover:bg-gray-100 rounded-lg transition-colors"
             >
-              <Settings className="w-5 h-5 text-gray-600" />
+              <Settings className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
             </button>
           </div>
           

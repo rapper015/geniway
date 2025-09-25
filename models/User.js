@@ -41,6 +41,7 @@ export class User {
     this.lastActiveSession = data.last_active_session || data.lastActiveSession;
     this.totalSessions = data.total_sessions || data.totalSessions;
     this.preferences = data.preferences;
+    this.guestMetadata = data.guest_metadata || data.guestMetadata;
     this.createdAt = data.created_at || data.createdAt;
     this.updatedAt = data.updated_at || data.updatedAt;
   }
@@ -96,7 +97,7 @@ export class User {
       fields.push(`${dbField} = $${paramCount}`);
       
       // Handle JSONB fields - stringify objects and arrays
-      if (['subjects', 'learningStyles', 'preferences'].includes(key) && (Array.isArray(value) || typeof value === 'object')) {
+      if (['subjects', 'learningStyles', 'preferences', 'guestMetadata'].includes(key) && (Array.isArray(value) || typeof value === 'object')) {
         values.push(JSON.stringify(value));
       } else {
         values.push(value);
@@ -142,6 +143,7 @@ export class User {
       averageQuizScore: 'average_quiz_score',
       lastActiveSession: 'last_active_session',
       totalSessions: 'total_sessions',
+      guestMetadata: 'guest_metadata',
       createdAt: 'created_at',
       updatedAt: 'updated_at'
     };
@@ -180,7 +182,7 @@ export class User {
       return new User(result.rows[0]);
     } else {
       // Create new user
-      const fields = ['email', 'password', 'name', 'first_name', 'last_name', 'preferred_name', 'whatsapp_number', 'role', 'grade', 'board', 'state', 'city', 'school', 'subjects', 'lang_pref', 'teaching_language', 'pace', 'learning_style', 'learning_styles', 'content_mode', 'fast_track_enabled', 'save_chat_history', 'study_streaks_enabled', 'break_reminders_enabled', 'mastery_nudges_enabled', 'data_sharing_enabled', 'is_guest', 'age_band', 'profile_completion_step', 'profile_completed', 'phone_number', 'total_questions_asked', 'total_quizzes_completed', 'average_quiz_score', 'last_active_session', 'total_sessions', 'preferences'];
+      const fields = ['email', 'password', 'name', 'first_name', 'last_name', 'preferred_name', 'whatsapp_number', 'role', 'grade', 'board', 'state', 'city', 'school', 'subjects', 'lang_pref', 'teaching_language', 'pace', 'learning_style', 'learning_styles', 'content_mode', 'fast_track_enabled', 'save_chat_history', 'study_streaks_enabled', 'break_reminders_enabled', 'mastery_nudges_enabled', 'data_sharing_enabled', 'is_guest', 'age_band', 'profile_completion_step', 'profile_completed', 'phone_number', 'total_questions_asked', 'total_quizzes_completed', 'average_quiz_score', 'last_active_session', 'total_sessions', 'preferences', 'guest_metadata'];
       
       const values = [
         this.email,
@@ -219,7 +221,8 @@ export class User {
         this.averageQuizScore,
         this.lastActiveSession,
         this.totalSessions,
-        JSON.stringify(this.preferences || {})
+        JSON.stringify(this.preferences || {}),
+        JSON.stringify(this.guestMetadata || {})
       ];
       
       const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');

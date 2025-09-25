@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { syncService } from '../lib/syncService';
+import { guestUserManager } from '../lib/guestUser';
 
 const ProfileCollectionContext = createContext();
 
@@ -15,6 +16,20 @@ export function ProfileCollectionProvider({ children }) {
   const [showStepModal, setShowStepModal] = useState(false);
   const [stepProfileData, setStepProfileData] = useState({});
   const [onStepComplete, setOnStepComplete] = useState(null);
+
+  // Function to sync guest data to database
+  const syncGuestDataToDatabase = async (profileData) => {
+    try {
+      const guestUser = await guestUserManager.getGuestUser();
+      if (guestUser && guestUser.id) {
+        // Update guest data in database
+        await guestUserManager.updateGuestUser(profileData);
+      }
+    } catch (error) {
+      console.warn('Failed to sync guest data to database:', error);
+      // Don't throw error - let the app continue working with localStorage
+    }
+  };
 
   // Check if user has already completed profile
   useEffect(() => {
@@ -81,6 +96,9 @@ export function ProfileCollectionProvider({ children }) {
         if (!response.ok) {
           throw new Error('Failed to save profile');
         }
+      } else {
+        // For guests, sync to database
+        await syncGuestDataToDatabase(profileData);
       }
       
       return true;
@@ -97,6 +115,9 @@ export function ProfileCollectionProvider({ children }) {
       if (currentStep === 'complete') {
         // Save the complete profile
         localStorage.setItem('guestProfile', JSON.stringify(stepData));
+        
+        // Sync to database for guests
+        await syncGuestDataToDatabase(stepData);
         
         // Call the completion callback if provided
         if (onStepComplete) {
@@ -118,6 +139,9 @@ export function ProfileCollectionProvider({ children }) {
       if (token) {
         // Add to sync queue for optimal sync
         syncService.instance.addToSyncQueue('updateProfile', stepData, 'high');
+      } else {
+        // For guests, sync to database immediately
+        await syncGuestDataToDatabase(stepData);
       }
       
       // Call the completion callback if provided and we have a valid step
