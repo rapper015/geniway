@@ -149,9 +149,12 @@ export default function SettingsModal({ isOpen, onClose, trigger, localProfileDa
           data_sharing_enabled: false
         };
 
+        // Get email directly from localStorage to ensure consistency
+        const guestUserFromStorage = JSON.parse(localStorage.getItem('geniway_guest_user') || '{}');
+        
         userInfo = {
           id: effectiveUserId,
-          email: `${effectiveUserId}@geniway.com`,
+          email: guestUserFromStorage.email || `${effectiveUserId}@geniway.com`, // Use email directly from localStorage
           role: localProfileData.role || 'student',
           name: localProfileData.name || 'Guest User'
         };
@@ -262,9 +265,12 @@ export default function SettingsModal({ isOpen, onClose, trigger, localProfileDa
           data_sharing_enabled: false
         };
         
+        // Get email directly from localStorage for fallback as well
+        const guestUserFromStorage = JSON.parse(localStorage.getItem('geniway_guest_user') || '{}');
+        
         fallbackUserInfo = {
           id: effectiveId,
-          email: `${effectiveId}@geniway.com`,
+          email: guestUserFromStorage.email || `${effectiveId}@geniway.com`,
           role: guestProfile.role || 'student',
           name: guestProfile.name || 'Guest User'
         };

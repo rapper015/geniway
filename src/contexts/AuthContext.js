@@ -22,16 +22,40 @@ export function AuthProvider({ children }) {
     if (token && userData) {
       try {
         const parsedUser = JSON.parse(userData);
-        console.log('AuthContext: Setting user from localStorage:', parsedUser);
-        setUser(parsedUser);
-        setGuestUser(null);
+        console.log('AuthContext: Found stored user data, validating token...');
         
-        // Refresh user data from server to get latest information
-        refreshUserData(token, parsedUser.id || parsedUser.id);
+        // Validate token by trying to refresh user data
+        // If this fails, we'll clear the auth data and fall back to guest mode
+        refreshUserData(token, parsedUser.id || parsedUser.id).then(() => {
+          // Token is valid, set user as authenticated
+          setUser(parsedUser);
+          setGuestUser(null);
+        }).catch((error) => {
+          console.log('AuthContext: Token validation failed, clearing auth data:', error);
+          // Token is invalid, clear auth data and fall back to guest mode
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          setUser(null);
+          // Initialize guest user
+          guestUserManager.getGuestUser().then(guest => {
+            setGuestUser(guest);
+          }).catch(guestError => {
+            console.error('Error getting guest user:', guestError);
+            setGuestUser(null);
+          });
+        });
       } catch (error) {
         console.error('Error parsing user data:', error);
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        setUser(null);
+        // Initialize guest user
+        guestUserManager.getGuestUser().then(guest => {
+          setGuestUser(guest);
+        }).catch(guestError => {
+          console.error('Error getting guest user:', guestError);
+          setGuestUser(null);
+        });
       }
     } else {
       // Initialize guest user if no authenticated user
@@ -71,10 +95,14 @@ export function AuthProvider({ children }) {
           console.log('AuthContext: User data updated successfully');
         }
       } else {
-        console.warn('AuthContext: Failed to refresh user data, using cached data');
+        console.warn('AuthContext: Failed to refresh user data, token may be invalid');
+        // Throw error to indicate token validation failed
+        throw new Error(`Token validation failed: ${response.status} ${response.statusText}`);
       }
     } catch (error) {
       console.error('AuthContext: Error refreshing user data:', error);
+      // Re-throw the error so the promise chain can catch it
+      throw error;
     }
   };
 
